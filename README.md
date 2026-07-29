@@ -1,118 +1,118 @@
-# Uni Tracker (PoC)
+# 🚀 Uni Tracker — Multi-Skill Progress Dashboard
 
-An offline desktop app for tracking multiple skills at once (programming
-languages, instruments, anything) — a hierarchical Category → Skill →
-Subskill tree, calendar-linked sticky notes, real-time progress tracking,
-and several ways to visualize how you're doing. Built with Java 25 +
-JavaFX 25 + SQLite. No network access required at runtime.
+**Uni Tracker** is an offline desktop app for tracking multiple skills at once (programming languages, instruments, anything). Featuring a **Dark Mode Glassmorphism UI**, it is designed to help ambitious learners, self-taught developers, and designers map, track, and visualize their progress in a structured way. 
 
-## Tech stack
+It utilizes a hierarchical Category → Skill → Subskill tree, calendar-linked sticky notes, real-time progress tracking, and several ways to visualize how you're doing. Built with Java 25 + JavaFX 25 + SQLite, it requires no network access at runtime.
+
+---
+
+## ✨ Key Features
+
+- 🌳 **Multi-Level Skill Hierarchy (Subskills)**  
+  Manage skills from top-level categories down to granular details (`Category` > `Main Skill` > `Subskill 1` > `Subskill 2`, etc.) to track your learning progress with precision.
+  
+- 📊 **Interactive Visualization Diagrams**  
+  Supports various chart types:
+  - **Comb-Shaped** & **Radar Chart** (with hierarchy depth filters and automatic text word-wrap).
+  - **Skill-Tree Diagram** (a genuinely recursive branching map of categories and subskills reading to an unlimited depth).
+  - **Curve** & **I-Shaped**.
+  - Options to *Toggle Rotate Text* and custom *H-Spacing / V-Spacing* settings (double-click to input values).
+
+- 🖐️ **Canvas Navigation (Photoshop-like Hand Tool)**  
+  - Freely pan the chart area using click & drag.
+  - Quick *Zoom In / Zoom Out* using buttons or **CTRL + Scroll**.
+  - *Auto-Center* feature to instantly bring the chart back to the middle of the screen.
+
+- 📅 **Calendar & Time-Travel Logging**  
+  - **Log Session**: Record daily learning time (Minutes & Points).
+  - **Right-Click Date Selection**: Choose any date on the calendar as the "Active Date" to log missed sessions or future schedules.
+  - **Batch Log Session**: Right-click the *Log Session* button to log multiple sessions at once within a specific *Date Range*.
+  - **History Indicator**: Dates with logged histories are visually marked on the calendar.
+  - **Sync Date**: A custom button to reset the active date back to the system's current date.
+
+- 📝 **Rich-Text Sticky Notes**  
+  - Linked directly to the selected calendar date.
+  - Equipped with a Markdown & Rich Text toolbar: **Bold (Ctrl+B)**, **Italic (Ctrl+I)**, **Headlines**, **Bullet**, and **Numbering**.
+  - **Interactive Checkbox `[ ]`**: Clickable checkboxes inside notes that don't break text formatting.
+  - Reorder notes easily with **Drag & Drop**.
+
+- 🎨 **Customization & Gamification**  
+  - Custom color palettes for each skill using a *Color Picker* adapted for the Dark Mode theme.
+  - **Celebration Effect**: Interactive confetti particle animations when a skill's completion progress reaches **100%**.
+
+- 📄 **PDF Report Export**  
+  Export your entire skill progress summary and visualization charts into a cleanly formatted PDF document with automatic word-wrap.
+
+---
+
+## 🛠️ Tech Stack
 
 | Concern                | Library                             | Version  |
 |-------------------------|--------------------------------------|----------|
-| UI framework            | JavaFX (controls, fxml, web, swing)  | 25.0.1   |
-| Local storage            | SQLite via `org.xerial:sqlite-jdbc`  | 3.53.2.0 |
-| Markdown rendering       | Flexmark-Java (`flexmark-all`)       | 0.64.8   |
-| PDF export               | Apache PDFBox                        | 3.0.7    |
-| Build tool               | Maven + `javafx-maven-plugin`        | 0.0.8    |
+| UI framework            | JavaFX (controls, fxml, web, swing) | 25.0.1 |
+| Local storage            | SQLite via `org.xerial:sqlite-jdbc` | 3.53.2.0 |
+| Markdown rendering       | Flexmark-Java (`flexmark-all`) | 0.64.8 |
+| PDF export               | Apache PDFBox | 3.0.7 |
+| Build tool               | Maven + `javafx-maven-plugin` | 0.0.8 |
 
-## Recent refactor: flat skills → unlimited-depth hierarchy
+---
 
-The `skills` table and the `Skill` model used to be flat (one free-text
-`category` string per skill). They are now a self-referencing tree —
-Category → Skill → Subskill 1 → Subskill 2 → ... to unlimited depth via a
-`parent_id` column — with an automatic, non-destructive one-time migration
-of any pre-existing flat data into the new structure (old `category` values
-become root Category rows; nothing is deleted).
+## 📥 How to Use (Portable Executable)
 
-**Done:**
-- `Skill.java` / `DatabaseHelper.java` — hierarchical model + CRUD,
-  `getSkillTree()`, cascade-safe delete (`deleteSkillCascade`, deliberately
-  *not* implemented via `ON DELETE CASCADE` — see the note in
-  `DatabaseHelper` for why that matters for Undo/Redo).
-- `depthLevelComboBox` — Comb-Shaped/Radar depth-level filter, Curve's
-  specific-descendant picker.
-- Skill-Tree — genuinely recursive, reads `Skill#getChildren()`, unlimited
-  depth.
-- S-Curve chart type removed; Comb-Shaped's breadth-bar label now tracks
-  the bar's real on-screen midpoint on both axes (was vertical-only before,
-  and drifted horizontally whenever H-Spacing or panning changed it).
-- `SkillSnapshot` (Undo/Redo), `UtrackFileUtil` (`.utrack` import/export,
-  with proper old-id → new-id remapping so parent/child relations survive a
-  round trip), and the Add/Edit Skill dialogs were all updated to match —
-  required for the project to compile as a whole, not just optional polish.
+For Windows users who want to run the application directly without compiling the source code:
 
-**Still open / not yet done:**
-- `.custom-color-dialog` contrast fix (ColorPicker's popup has light text on
-  a light background in the current theme).
-- Ctrl+Scroll-to-zoom on the chart canvas.
-- "Log Session" still timestamps against today instead of the date selected
-  on the calendar.
-- `PdfExportUtil` still prints a skill's old flat category in the PDF table
-  — needs a decision (full breadcrumb path? just the root Category?) rather
-  than a mechanical rename.
-- `DeleteSkillCommand` restores exactly the one node it deleted; deleting a
-  Category (or any node with children) now fails safely instead of losing
-  data (see the `deleteSkillCascade` note above), but Undo does not yet
-  restore an entire deleted subtree in one step.
+1. Go to the **[Releases](../../releases)** section in this repository.
+2. Download the latest `.zip` release package (e.g., `UniTracker-v1.0.0-Windows.zip`).
+3. Extract the `.zip` file to a local folder on your computer.
+4. Run **`UniTracker.exe`**.
 
-## Project structure
+> **Note:** If your computer does not have Java 25 installed, ensure the bundled `jre` folder remains in the exact same directory as `UniTracker.exe`.
 
-```
-UniTracker/
-├── pom.xml
-├── nbactions.xml                       NetBeans Run/Debug → javafx:run
-├── README.md
-└── src/main/
-    ├── java/com/unitracker/
-    │   ├── MainApp.java                    entry point
-    │   ├── command/                        Undo/Redo (Command Pattern)
-    │   │   ├── Command.java
-    │   │   ├── CommandManager.java
-    │   │   ├── SkillSnapshot.java
-    │   │   ├── LogProgressCommand.java
-    │   │   ├── EditSkillCommand.java
-    │   │   └── DeleteSkillCommand.java
-    │   ├── controller/DashboardController.java
-    │   ├── db/DatabaseHelper.java          SQLite schema + hierarchical CRUD
-    │   ├── model/
-    │   │   ├── Skill.java                  tree node (Category/Skill/Subskill N)
-    │   │   ├── CalendarNote.java
-    │   │   └── ProgressLog.java
-    │   └── util/
-    │       ├── MarkdownUtil.java           Flexmark wrapper
-    │       ├── PdfExportUtil.java          PDFBox report generator
-    │       ├── UtrackFileUtil.java         .utrack import/export
-    │       └── VisualizationRenderer.java  all Canvas chart drawing
-    └── resources/com/unitracker/
-        ├── view/Dashboard.fxml
-        ├── css/styles.css
-        └── fonts/  (see PLACE_FONTS_HERE.txt)
-```
+---
 
-## Quick setup
+## 💻 Compilation Guide & Quick Setup
+
+If you want to compile and build the project from the source code:
 
 1. Install **JDK 25** (JavaFX 25 will not run on anything older than JDK 23).
-2. Install **NetBeans IDE** (any recent version — this is a plain Maven
-   project, which NetBeans 12+ opens natively: no separate NetBeans-project
-   conversion needed).
-3. `File → Open Project…` → select this `UniTracker` folder.
-4. Right-click the project → **Clean and Build** (downloads dependencies —
-   the one step that needs internet; the app itself is fully offline
-   afterward).
-5. Click the green **Run** button. `nbactions.xml` already binds it to
-   `javafx:run` with the `--add-modules javafx.web,javafx.swing` flags the
-   project needs, so no manual "Run Maven Goals…" step is required.
+2. Install **NetBeans IDE** (any recent version — this is a plain Maven project, which NetBeans 12+ opens natively: no separate NetBeans-project conversion needed)[cite: 3].
+3. `File → Open Project…` → select this `UniTracker` folder[cite: 3].
+4. Right-click the project → **Clean and Build** (downloads dependencies — the one step that needs internet; the app itself is fully offline afterward)[cite: 3].
+5. Click the green **Run** button[cite: 3]. `nbactions.xml` already binds it to `javafx:run` with the `--add-modules javafx.web,javafx.swing` flags the project needs, so no manual "Run Maven Goals…" step is required[cite: 3].
 
-First launch creates `~/.unitracker/unitracker.db` automatically and seeds
-three example skills (each under its own Category) so the UI isn't empty.
+First launch creates `~/.unitracker/unitracker.db` automatically and seeds three example skills (each under its own Category) so the UI isn't empty[cite: 3].
 
-## Known limitations (by design, for a PoC)
+---
 
-- No user authentication / multi-profile support — it's a single local user.
-- No automated tests included.
-- `.utrack` is hand-rolled pipe-delimited text, not JSON/versioned.
-- JavaFX CSS has no true `backdrop-filter` blur, so the "glass" look is
-  approximated with translucent fills + borders + shadows (see the comment
-  block at the top of `styles.css`).
+## 📂 Project Structure
 
+```text
+UniTracker/
+├── pom.xml[cite: 3]
+├── nbactions.xml                       NetBeans Run/Debug → javafx:run[cite: 3]
+├── README.md[cite: 3]
+└── src/main/[cite: 3]
+    ├── java/com/unitracker/[cite: 3]
+    │   ├── MainApp.java                    entry point[cite: 3]
+    │   ├── command/                        Undo/Redo (Command Pattern)[cite: 3]
+    │   │   ├── Command.java[cite: 3]
+    │   │   ├── CommandManager.java[cite: 3]
+    │   │   ├── SkillSnapshot.java[cite: 3]
+    │   │   ├── LogProgressCommand.java[cite: 3]
+    │   │   ├── EditSkillCommand.java[cite: 3]
+    │   │   └── DeleteSkillCommand.java[cite: 3]
+    │   ├── controller/DashboardController.java[cite: 3]
+    │   ├── db/DatabaseHelper.java          SQLite schema + hierarchical CRUD[cite: 3]
+    │   ├── model/[cite: 3]
+    │   │   ├── Skill.java                  tree node (Category/Skill/Subskill N)[cite: 3]
+    │   │   ├── CalendarNote.java[cite: 3]
+    │   │   └── ProgressLog.java[cite: 3]
+    │   └── util/[cite: 3]
+    │       ├── MarkdownUtil.java           Flexmark wrapper[cite: 3]
+    │       ├── PdfExportUtil.java          PDFBox report generator[cite: 3]
+    │       ├── UtrackFileUtil.java         .utrack import/export[cite: 3]
+    │       └── VisualizationRenderer.java  all Canvas chart drawing[cite: 3]
+    └── resources/com/unitracker/[cite: 3]
+        ├── view/Dashboard.fxml[cite: 3]
+        ├── css/styles.css[cite: 3]
+        └── fonts/  (see PLACE_FONTS_HERE.txt)[cite: 3]
