@@ -1,4 +1,4 @@
-# 🚀 Uni Tracker — Multi-Skill Progress Dashboard
+# Uni Tracker | Multi-Skill Progress Dashboard
 
 **Uni Tracker** is an offline desktop app for tracking multiple skills at once (programming languages, instruments, anything). Featuring a **Dark Mode Glassmorphism UI**, it is designed to help ambitious learners, self-taught developers, and designers map, track, and visualize their progress in a structured way. 
 
@@ -6,46 +6,46 @@ It utilizes a hierarchical Category → Skill → Subskill tree, calendar-linked
 
 ---
 
-## ✨ Key Features
+##  Key Features
 
-- 🌳 **Multi-Level Skill Hierarchy (Subskills)**  
+- **Multi-Level Skill Hierarchy (Subskills)**  
   Manage skills from top-level categories down to granular details (`Category` > `Main Skill` > `Subskill 1` > `Subskill 2`, etc.) to track your learning progress with precision.
   
-- 📊 **Interactive Visualization Diagrams**  
+- **Interactive Visualization Diagrams**  
   Supports various chart types:
   - **Comb-Shaped** & **Radar Chart** (with hierarchy depth filters and automatic text word-wrap).
   - **Skill-Tree Diagram** (a genuinely recursive branching map of categories and subskills reading to an unlimited depth).
   - **Curve** & **I-Shaped**.
   - Options to *Toggle Rotate Text* and custom *H-Spacing / V-Spacing* settings (double-click to input values).
 
-- 🖐️ **Canvas Navigation (Photoshop-like Hand Tool)**  
+- **Canvas Navigation (Photoshop-like Hand Tool)**  
   - Freely pan the chart area using click & drag.
   - Quick *Zoom In / Zoom Out* using buttons or **CTRL + Scroll**.
   - *Auto-Center* feature to instantly bring the chart back to the middle of the screen.
 
-- 📅 **Calendar & Time-Travel Logging**  
+- **Calendar & Time-Travel Logging**  
   - **Log Session**: Record daily learning time (Minutes & Points).
   - **Right-Click Date Selection**: Choose any date on the calendar as the "Active Date" to log missed sessions or future schedules.
   - **Batch Log Session**: Right-click the *Log Session* button to log multiple sessions at once within a specific *Date Range*.
   - **History Indicator**: Dates with logged histories are visually marked on the calendar.
   - **Sync Date**: A custom button to reset the active date back to the system's current date.
 
-- 📝 **Rich-Text Sticky Notes**  
+- **Rich-Text Sticky Notes**  
   - Linked directly to the selected calendar date.
   - Equipped with a Markdown & Rich Text toolbar: **Bold (Ctrl+B)**, **Italic (Ctrl+I)**, **Headlines**, **Bullet**, and **Numbering**.
   - **Interactive Checkbox `[ ]`**: Clickable checkboxes inside notes that don't break text formatting.
   - Reorder notes easily with **Drag & Drop**.
 
-- 🎨 **Customization & Gamification**  
+- **Customization & Gamification**  
   - Custom color palettes for each skill using a *Color Picker* adapted for the Dark Mode theme.
   - **Celebration Effect**: Interactive confetti particle animations when a skill's completion progress reaches **100%**.
 
-- 📄 **PDF Report Export**  
+- **PDF Report Export**  
   Export your entire skill progress summary and visualization charts into a cleanly formatted PDF document with automatic word-wrap.
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Concern                | Library                             | Version  |
 |-------------------------|--------------------------------------|----------|
@@ -57,7 +57,7 @@ It utilizes a hierarchical Category → Skill → Subskill tree, calendar-linked
 
 ---
 
-## 📥 How to Use (Portable Executable)
+## How to Use (Portable Executable)
 
 For Windows users who want to run the application directly without compiling the source code:
 
@@ -70,7 +70,7 @@ For Windows users who want to run the application directly without compiling the
 
 ---
 
-## 💻 Compilation Guide & Quick Setup
+## Compilation Guide & Quick Setup
 
 If you want to compile and build the project from the source code:
 
@@ -84,7 +84,7 @@ First launch creates `~/.unitracker/unitracker.db` automatically and seeds three
 
 ---
 
-## 📂 Project Structure
+## Project Structure
 
 ```text
 UniTracker/
