@@ -1,0 +1,240 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.canvas.Canvas?>
+<?import javafx.scene.chart.LineChart?>
+<?import javafx.scene.chart.NumberAxis?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.CheckBox?>
+<?import javafx.scene.control.ColorPicker?>
+<?import javafx.scene.control.Tooltip?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ProgressBar?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.control.Slider?>
+<?import javafx.scene.control.Spinner?>
+<?import javafx.scene.control.SplitPane?>
+<?import javafx.scene.control.ToggleButton?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.FlowPane?>
+<?import javafx.scene.layout.GridPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.shape.Circle?>
+
+<!--
+    Layout map (v4 - see DashboardController.java for the full field list):
+      TOP    -> title + Undo/Redo/Clear-Cache + Save/Import/Export/PDF
+      LEFT   -> Calendar (top) + Sticky Notes (below)
+      CENTER -> Skill header (+ Edit/Delete/Reorder, swatches + ColorPicker)
+                + metrics + PERSISTENT progress bar (A.1) + real-time input
+                + 6-way graph toggle (Progress Bar removed - it's persistent
+                now, not a toggle) + a vertical SplitPane (A.2) whose TOP
+                pane is [filter panel, then zoom/spacing controls below it]
+                and whose BOTTOM pane is the visualization StackPane
+      BOTTOM -> status bar
+
+    REMOVED in v4: progressBarToggle + progressBarView + progressBarPercentLabel
+    (item A.1 - the bar itself moved up near the metrics, it's no longer a
+    toggle-able "view" competing with the charts for space).
+-->
+<BorderPane fx:id="rootPane" styleClass="root-background" stylesheets="@../css/styles.css"
+            xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml"
+            fx:controller="com.unitracker.controller.DashboardController">
+
+    <!-- ===================== TOP BAR ===================== -->
+    <top>
+        <HBox styleClass="top-bar" spacing="12" alignment="CENTER_LEFT">
+            <padding><Insets top="14" right="24" bottom="14" left="24"/></padding>
+            <Label text="Uni Tracker" styleClass="app-title"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Button fx:id="undoButton" text="&#8630; Undo" styleClass="secondary-button" onAction="#handleUndo"/>
+            <Button fx:id="redoButton" text="&#8631; Redo" styleClass="secondary-button" onAction="#handleRedo"/>
+            <Button text="Clear Cache" styleClass="secondary-button" onAction="#handleRefreshAndClearCache"/>
+            <Region minWidth="8" maxWidth="8"/>
+            <Button text="Save" styleClass="secondary-button" onAction="#handleSaveState"/>
+            <Button text="Import .utrack" styleClass="secondary-button" onAction="#handleImportUtrack"/>
+            <Button text="Export .utrack" styleClass="secondary-button" onAction="#handleExportUtrack"/>
+            <Button text="Export PDF" styleClass="accent-button" onAction="#handleExportPdf"/>
+        </HBox>
+    </top>
+
+    <!-- ===================== MAIN CONTENT ===================== -->
+    <center>
+        <HBox spacing="20">
+            <padding><Insets top="24" right="24" bottom="24" left="24"/></padding>
+
+            <!-- ==== LEFT COLUMN: Calendar (top) + Sticky Notes (below) ==== -->
+            <VBox spacing="20" prefWidth="380" minWidth="340">
+
+                <VBox styleClass="glass-panel" spacing="10">
+                    <HBox alignment="CENTER" spacing="10">
+                        <Button text="&#8249;" styleClass="icon-button" onAction="#handlePreviousMonth"/>
+                        <Label fx:id="monthYearLabel" styleClass="panel-title" alignment="CENTER"
+                               maxWidth="Infinity" HBox.hgrow="ALWAYS"/>
+                        <Button text="&#8250;" styleClass="icon-button" onAction="#handleNextMonth"/>
+                        <Button text="&#8635;" styleClass="icon-button" onAction="#handleSyncDate">
+                            <tooltip><Tooltip text="Reset the mocked &quot;today&quot; back to the real system date"/></tooltip>
+                        </Button>
+                    </HBox>
+                    <GridPane fx:id="calendarGrid" hgap="4" vgap="6" alignment="CENTER"/>
+                </VBox>
+
+                <VBox styleClass="glass-panel" spacing="10" VBox.vgrow="ALWAYS">
+                    <HBox alignment="CENTER_LEFT" spacing="8">
+                        <Label text="Sticky Notes" styleClass="panel-title"/>
+                        <Label fx:id="selectedDateLabel" styleClass="metric-label"/>
+                        <Region HBox.hgrow="ALWAYS"/>
+                        <Button text="+ Note" styleClass="accent-button" onAction="#handleAddNote"/>
+                    </HBox>
+                    <ScrollPane fitToWidth="true" styleClass="notes-scroll" VBox.vgrow="ALWAYS">
+                        <VBox fx:id="notesContainer" spacing="10"/>
+                    </ScrollPane>
+                </VBox>
+            </VBox>
+
+            <!-- ==== RIGHT COLUMN: Skill Tracker + Visualization ==== -->
+            <VBox styleClass="glass-panel" spacing="12" HBox.hgrow="ALWAYS">
+
+                <!-- Skill selector + Edit/Delete/Reorder + Active/Stalled + swatches + ColorPicker -->
+                <HBox alignment="CENTER_LEFT" spacing="8">
+                    <Circle fx:id="statusDot" radius="7" fill="#A8EB12"/>
+                    <ComboBox fx:id="skillComboBox" promptText="Select a skill" prefWidth="150"/>
+                    <Button text="+ New" styleClass="secondary-button" onAction="#handleAddSkill"/>
+                    <Button fx:id="editSkillButton" text="&#9998; Edit" styleClass="icon-button" onAction="#handleEditSkill"/>
+                    <Button fx:id="deleteSkillButton" text="&#128465; Delete" styleClass="icon-button" onAction="#handleDeleteSkill"/>
+                    <Button text="&#8645; Reorder" styleClass="icon-button" onAction="#handleReorderSkills"/>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <ToggleButton fx:id="activeStatusToggle" text="Active" styleClass="status-toggle-active"/>
+                    <ToggleButton fx:id="stalledStatusToggle" text="Stalled" styleClass="status-toggle-stalled"/>
+                    <HBox fx:id="colorSwatchRow" spacing="6" alignment="CENTER_LEFT"/>
+                    <ColorPicker fx:id="customColorPicker" styleClass="custom-color-picker"/>
+                </HBox>
+
+                <!-- Metrics: current / target / completion -->
+                <HBox spacing="36" alignment="CENTER_LEFT" styleClass="metrics-row">
+                    <VBox alignment="CENTER_LEFT">
+                        <Label fx:id="currentPointsLabel" text="0.0" styleClass="metric-value"/>
+                        <Label text="Current Points" styleClass="metric-label"/>
+                    </VBox>
+                    <VBox alignment="CENTER_LEFT">
+                        <Label fx:id="targetPointsLabel" text="0.0" styleClass="metric-value"/>
+                        <Label text="Target Points" styleClass="metric-label"/>
+                    </VBox>
+                    <VBox alignment="CENTER_LEFT">
+                        <Label fx:id="percentageHeaderLabel" text="0%" styleClass="metric-value"/>
+                        <Label text="Completion" styleClass="metric-label"/>
+                    </VBox>
+                </HBox>
+
+                <!-- A.1: persistent progress bar - always visible, no longer a toggle-able view -->
+                <ProgressBar fx:id="mainProgressBar" progress="0" maxWidth="Infinity" styleClass="progress-bar"/>
+
+                <!-- Real-time input: minutes / points -> instantly updates the metrics above -->
+                <HBox spacing="12" alignment="CENTER_LEFT" styleClass="input-row">
+                    <Label text="Minutes" styleClass="metric-label"/>
+                    <Spinner fx:id="minutesSpinner" editable="true" prefWidth="90"/>
+                    <Label text="Points" styleClass="metric-label"/>
+                    <Spinner fx:id="pointsSpinner" editable="true" prefWidth="90"/>
+                    <Button fx:id="logSessionButton" text="Log Session" styleClass="accent-button" onAction="#handleLogProgress"/>
+                </HBox>
+
+                <!-- Graph-type toggle: Progress Bar removed (now persistent above, item A.1).
+                     S-Curve removed (item B.4). depthLevelComboBox added to the right of the
+                     toggles (item B.2): Comb-Shaped/Radar use it to pick which hierarchy depth
+                     is drawn; Curve uses it to pick one specific descendant of the currently
+                     selected skill. Hidden for I-Shaped/Skill-Tree - see
+                     DashboardController#showDepthLevelComboBox. -->
+                <FlowPane hgap="8" vgap="8" styleClass="toggle-row" alignment="CENTER_LEFT">
+                    <ToggleButton fx:id="curveToggle" text="Curve" styleClass="graph-toggle"
+                                  onAction="#handleToggleVisualization"/>
+                    <ToggleButton fx:id="iShapedToggle" text="I-Shaped" styleClass="graph-toggle"
+                                  onAction="#handleToggleVisualization"/>
+                    <ToggleButton fx:id="combShapedToggle" text="Comb-Shaped" styleClass="graph-toggle"
+                                  onAction="#handleToggleVisualization"/>
+                    <ToggleButton fx:id="skillTreeToggle" text="Skill-Tree" styleClass="graph-toggle"
+                                  onAction="#handleToggleVisualization"/>
+                    <ToggleButton fx:id="radarToggle" text="Radar" styleClass="graph-toggle"
+                                  onAction="#handleToggleVisualization"/>
+                    <Region minWidth="10" maxWidth="10"/>
+                    <ComboBox fx:id="depthLevelComboBox" styleClass="depth-level-combo"
+                              promptText="Depth level" visible="false" managed="false"/>
+                </FlowPane>
+
+                <!-- A.2: vertical SplitPane - top pane holds the filter panel (positioned ABOVE
+                     the zoom/spacing controls, per the request) + those controls themselves;
+                     bottom pane is the chart display area. Divider styled in styles.css (A.3). -->
+                <SplitPane fx:id="mainSplitPane" orientation="VERTICAL" dividerPositions="0.38"
+                           VBox.vgrow="ALWAYS" styleClass="main-split-pane">
+
+                    <VBox spacing="10">
+                        <!-- Collapsible, category-grouped skill filter for Comb-Shaped/Skill-Tree/Radar -->
+                        <ScrollPane fx:id="filterScrollPane" fitToWidth="true" styleClass="filter-scroll"
+                                    VBox.vgrow="ALWAYS" visible="false" managed="false">
+                            <VBox fx:id="filterCategoriesBox" spacing="4"/>
+                        </ScrollPane>
+
+                        <!-- Zoom + H/V spacing controls -->
+                        <HBox fx:id="zoomControlsRow" spacing="14" alignment="CENTER_LEFT" styleClass="zoom-row"
+                              visible="false" managed="false">
+                            <HBox spacing="4" alignment="CENTER_LEFT">
+                                <Button text="-" styleClass="icon-button zoom-button" onAction="#handleZoomOut"/>
+                                <Label fx:id="zoomLevelLabel" text="100%" styleClass="metric-label" minWidth="38" alignment="CENTER"/>
+                                <Button text="+" styleClass="icon-button zoom-button" onAction="#handleZoomIn"/>
+                                <Button text="Reset" styleClass="icon-button" onAction="#handleZoomReset"/>
+                            </HBox>
+                            <HBox spacing="6" alignment="CENTER_LEFT">
+                                <Label text="H-Spacing" styleClass="metric-label"/>
+                                <Slider fx:id="hSpacingSlider" min="0.6" max="6.0" value="1.0" prefWidth="90"/>
+                            </HBox>
+                            <HBox spacing="6" alignment="CENTER_LEFT">
+                                <Label text="V-Spacing" styleClass="metric-label"/>
+                                <Slider fx:id="vSpacingSlider" min="0.6" max="5.0" value="1.0" prefWidth="90"/>
+                            </HBox>
+                            <CheckBox fx:id="rotateLabelsCheckBox" text="Rotate Text" styleClass="rotate-checkbox"/>
+                        </HBox>
+                    </VBox>
+
+                    <StackPane fx:id="visualizationStack" styleClass="visualization-area">
+
+                        <LineChart fx:id="curveChart" visible="false" managed="false"
+                                   animated="false" legendVisible="false">
+                            <xAxis>
+                                <NumberAxis label="Session #"/>
+                            </xAxis>
+                            <yAxis>
+                                <NumberAxis label="Cumulative Points"/>
+                            </yAxis>
+                        </LineChart>
+
+                        <!-- Canvas wrapped in its own ScrollPane so zoomed/spaced-out content
+                             can be panned/scrolled into view (B.7: hand-tool panning). -->
+                        <ScrollPane fx:id="structuralCanvasScroll" styleClass="canvas-scroll"
+                                    visible="false" managed="false">
+                            <Canvas fx:id="structuralCanvas" width="600" height="380"/>
+                        </ScrollPane>
+
+                        <!-- Editable Comb-Shaped breadth category label - click to rename. -->
+                        <Label fx:id="breadthLabel" text="General Knowledge" styleClass="breadth-label"
+                               visible="false" managed="false"
+                               StackPane.alignment="TOP_CENTER">
+                            <StackPane.margin><Insets top="22"/></StackPane.margin>
+                        </Label>
+                    </StackPane>
+                </SplitPane>
+            </VBox>
+        </HBox>
+    </center>
+
+    <!-- ===================== STATUS BAR ===================== -->
+    <bottom>
+        <HBox styleClass="status-bar" alignment="CENTER_LEFT">
+            <padding><Insets top="6" right="24" bottom="10" left="24"/></padding>
+            <Label fx:id="statusBarLabel" text="Ready." styleClass="status-bar-label"/>
+        </HBox>
+    </bottom>
+
+</BorderPane>

@@ -1,0 +1,770 @@
+/* ============================================================
+   UNI TRACKER — Dark Mode Glassmorphism
+   ============================================================
+   IMPORTANT — JavaFX CSS is NOT web CSS:
+     - No backdrop-filter/blur-behind-element exists in JavaFX, so the
+       "glass" look is approximated with translucent rgba() backgrounds,
+       a subtle 1px accent border, and a soft dropshadow for depth.
+     - -fx-font-family takes a single family name (no comma fallback
+       lists like web CSS). If Space Grotesk / Poppins .ttf files are not
+       present in resources/com/unitracker/fonts (see MainApp.loadFont),
+       JavaFX silently falls back to the platform default font - the UI
+       still works, just without the custom typeface.
+   ============================================================ */
+
+/* ---------- Palette (JavaFX "looked-up colors", referenced below as -fx-...: -name;) ---------- */
+.root {
+    -deep-blue: #0B1A2B;
+    -astronaut: #414F6C;
+    -lime-green: #A8EB12;
+    -inch-worm: #008793;
+    -cerulean: #004D7A;
+
+    -glass-bg: rgba(255, 255, 255, 0.06);
+    -glass-border: rgba(168, 235, 18, 0.18);
+
+    -text-primary: #E7ECF3;
+    -text-secondary: #AAB4C4;
+    -text-muted: #6E7A8F;
+
+    -fx-font-family: "Poppins";
+    -fx-background-color: -deep-blue;
+}
+
+/* ---------- Safe base defaults (explicit, not relied-on inheritance) ---------- */
+.label {
+    -fx-text-fill: -text-primary;
+    -fx-font-family: "Poppins";
+}
+.button {
+    -fx-font-family: "Poppins";
+    -fx-cursor: hand;
+}
+.root-background {
+    -fx-background-color: -deep-blue;
+}
+
+/* ============================================================
+   TYPOGRAPHY
+   ============================================================ */
+.app-title {
+    -fx-font-family: "Space Grotesk";
+    -fx-font-size: 22px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -text-primary;
+}
+.panel-title {
+    -fx-font-family: "Space Grotesk";
+    -fx-font-size: 15px;
+    -fx-font-weight: 600;
+    -fx-text-fill: -text-primary;
+}
+.metric-value {
+    -fx-font-family: "Space Grotesk";
+    -fx-font-size: 26px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -lime-green;
+}
+.metric-label {
+    -fx-font-family: "Poppins";
+    -fx-font-size: 11px;
+    -fx-text-fill: -text-muted;
+}
+.big-percentage {
+    -fx-font-family: "Space Grotesk";
+    -fx-font-size: 60px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -lime-green;
+}
+.empty-notes-label {
+    -fx-text-fill: -text-muted;
+    -fx-font-family: "Poppins";
+    -fx-font-style: italic;
+    -fx-padding: 10px;
+}
+
+/* ============================================================
+   GLASS PANEL — the core reusable "glassmorphism card" style
+   ============================================================ */
+.glass-panel {
+    -fx-background-color: -glass-bg;
+    -fx-background-radius: 18px;
+    -fx-border-color: -glass-border;
+    -fx-border-width: 1px;
+    -fx-border-radius: 18px;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.35), 24, 0.15, 0, 10);
+    -fx-padding: 16px;
+}
+
+.top-bar {
+    -fx-background-color: rgba(255, 255, 255, 0.03);
+    -fx-border-color: transparent transparent -glass-border transparent;
+    -fx-border-width: 0 0 1px 0;
+}
+
+/* ============================================================
+   BUTTONS
+   ============================================================ */
+.accent-button {
+    -fx-background-color: -lime-green;
+    -fx-text-fill: #0B1A2B;
+    -fx-font-family: "Poppins";
+    -fx-font-weight: 600;
+    -fx-font-size: 12px;
+    -fx-background-radius: 10px;
+    -fx-padding: 8 18;
+    -fx-border-width: 0;
+    -fx-cursor: hand;
+}
+.accent-button:hover {
+    -fx-background-color: derive(-lime-green, 15%);
+    -fx-effect: dropshadow(gaussian, rgba(168, 235, 18, 0.45), 16, 0.2, 0, 0);
+}
+.accent-button:pressed {
+    -fx-background-color: derive(-lime-green, -15%);
+}
+
+.secondary-button {
+    -fx-background-color: rgba(255, 255, 255, 0.07);
+    -fx-text-fill: -text-primary;
+    -fx-font-family: "Poppins";
+    -fx-font-size: 12px;
+    -fx-background-radius: 10px;
+    -fx-border-color: rgba(255, 255, 255, 0.14);
+    -fx-border-radius: 10px;
+    -fx-border-width: 1px;
+    -fx-padding: 8 16;
+    -fx-cursor: hand;
+}
+.secondary-button:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.13);
+}
+
+.icon-button {
+    -fx-background-color: transparent;
+    -fx-text-fill: -text-secondary;
+    -fx-font-family: "Poppins";
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-cursor: hand;
+    -fx-padding: 2 8;
+}
+.icon-button:hover {
+    -fx-text-fill: -lime-green;
+}
+.icon-button:disabled {
+    -fx-opacity: 0.35;
+    -fx-cursor: default;
+}
+
+/* ============================================================
+   MULTI-SKILL FILTER (Pi/Comb-Shaped, Skill-Tree, Radar)
+   ============================================================ */
+.filter-row {
+    -fx-padding: 2 0;
+}
+.check-box {
+    -fx-text-fill: -text-secondary;
+    -fx-font-family: "Poppins";
+    -fx-font-size: 11px;
+}
+.check-box .box {
+    -fx-background-color: rgba(255, 255, 255, 0.08);
+    -fx-border-color: rgba(255, 255, 255, 0.2);
+    -fx-border-radius: 3px;
+    -fx-background-radius: 3px;
+}
+.check-box:selected .box {
+    -fx-background-color: -lime-green;
+    -fx-border-color: -lime-green;
+}
+.check-box:selected .mark {
+    -fx-background-color: #0B1A2B;
+}
+
+/* RadioButton had no styling at all before this - it was silently falling
+   back to Modena's light-background-oriented default text color, unreadable
+   against this dark theme (see the Advanced Log dialog's mode switch). */
+.radio-button {
+    -fx-text-fill: -text-secondary;
+    -fx-font-family: "Poppins";
+    -fx-font-size: 11px;
+}
+.radio-button .radio {
+    -fx-background-color: rgba(255, 255, 255, 0.08);
+    -fx-border-color: rgba(255, 255, 255, 0.2);
+}
+.radio-button:selected .radio .dot {
+    -fx-background-color: -lime-green;
+}
+.radio-button:selected .radio {
+    -fx-border-color: -lime-green;
+}
+
+/* ============================================================
+   EDITABLE T/PI/COMB-SHAPED BREADTH LABEL
+   ============================================================ */
+.breadth-label {
+    -fx-text-fill: -text-secondary;
+    -fx-font-family: "Poppins";
+    -fx-font-size: 11px;
+    -fx-font-style: italic;
+    -fx-cursor: hand;
+    -fx-padding: 2 8;
+    -fx-background-color: rgba(255, 255, 255, 0.04);
+    -fx-background-radius: 10px;
+}
+.breadth-label:hover {
+    -fx-text-fill: -lime-green;
+    -fx-background-color: rgba(168, 235, 18, 0.1);
+}
+.breadth-label-edit {
+    -fx-font-family: "Poppins";
+    -fx-font-size: 11px;
+    -fx-background-color: #16263A;
+    -fx-text-fill: -text-primary;
+    -fx-border-color: -lime-green;
+    -fx-border-radius: 6px;
+    -fx-background-radius: 6px;
+    -fx-border-width: 1px;
+    -fx-padding: 3 8;
+}
+
+/* ============================================================
+   SPLITPANE (A.2/A.3) - thin lime-green divider, not the default
+   thick white/gray bar
+   ============================================================ */
+.main-split-pane {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+/* B.6 (corrected): a descendant selector, not a direct-child one - SplitPane's
+   actual skin puts an intermediate node between .split-pane and
+   .split-pane-divider, so ".split-pane > .split-pane-divider" (the previous
+   attempt) never matched at all. -fx-background-insets is set explicitly
+   because a divider's default insets can otherwise swallow a thin background
+   into invisibility. Padding is both the visible thickness AND the
+   grabbable/hitbox size in JavaFX (a divider has no other content) - 3px
+   is a deliberate middle ground between "thin" and "easy to grab". */
+.split-pane .split-pane-divider {
+    -fx-background-color: -lime-green;
+    -fx-background-insets: 0;
+    -fx-padding: 6px 0;
+}
+.split-pane .split-pane-divider:hover,
+.split-pane .split-pane-divider:pressed {
+    -fx-background-color: derive(-lime-green, 20%);
+}
+
+/* ============================================================
+   COLORPICKER (A.4) - restyled to match the dark theme instead of
+   the default light Modena button
+   ============================================================ */
+.custom-color-picker {
+    -fx-background-color: rgba(255, 255, 255, 0.07);
+    -fx-background-radius: 8px;
+    -fx-border-color: rgba(255, 255, 255, 0.14);
+    -fx-border-radius: 8px;
+    -fx-border-width: 1px;
+    -fx-mark-color: -text-primary;
+}
+.custom-color-picker .color-picker-label {
+    -fx-text-fill: -text-primary;
+}
+.custom-color-picker:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.13);
+}
+.custom-color-picker .arrow-button {
+    -fx-background-color: transparent;
+}
+.custom-color-picker .arrow {
+    -fx-background-color: -text-secondary;
+}
+
+/* B.5: ColorPicker's dropdown popup and "Custom Color..." dialog are
+   SEPARATE from the closed control (.custom-color-picker above) and default
+   to Modena's light background regardless of how the closed control is
+   styled, which is why the hex text/labels were unreadable. ".color-palette"
+   and ".custom-color-dialog" are confirmed against modena.css's own class
+   list, not guessed. */
+.color-palette {
+    -fx-background-color: #16263A;
+    -fx-border-color: -glass-border;
+    -fx-border-width: 1px;
+}
+.color-palette .label {
+    -fx-text-fill: -text-primary;
+}
+.color-palette .button {
+    -fx-background-color: rgba(255, 255, 255, 0.08);
+    -fx-text-fill: -text-primary;
+}
+/* A.1 REVISI KE-2 (akar masalah sebenarnya): saya cek source asli
+   ColorPalette.java di OpenJFX - class ".custom-color-link" yang saya
+   pakai selama ini TIDAK PERNAH ADA. Link ini cuma Hyperlink polos tanpa
+   style class tambahan apa pun, jadi selector-nya harus ".hyperlink" biasa
+   (di dalam .color-palette, yang memang benar sebagai container-nya).
+   Source-nya JUGA mengkonfirmasi kenapa :visited WAJIB dicakup - bukan
+   soal "sudah pernah diklik", tapi baris ini ada persis di constructor-nya:
+       customColorLink.setVisited(true); // so that it always appears blue
+   Dipanggil UNCONDITIONAL, permanen, dari awal render - bukan hasil
+   interaksi user. Jadi state normalnya MEMANG SELALU :visited. */
+.color-picker .hyperlink,
+.color-palette .hyperlink,
+.color-picker .hyperlink:visited,
+.color-palette .hyperlink:visited {
+    -fx-text-fill: -text-primary;
+}
+.color-picker .hyperlink:hover,
+.color-palette .hyperlink:hover,
+.color-picker .hyperlink:visited:hover,
+.color-palette .hyperlink:visited:hover {
+    -fx-text-fill: -lime-green;
+}
+
+.custom-color-dialog {
+    -fx-background-color: -deep-blue;
+}
+.custom-color-dialog .label {
+    -fx-text-fill: -text-primary;
+}
+.custom-color-dialog .text-field {
+    -fx-background-color: rgba(255, 255, 255, 0.08);
+    -fx-text-fill: -text-primary;
+}
+/* A.2: the HSB/RGB/Web settings box is its own separate Region behind the
+   toggle buttons and sliders (style class "customcolor-controls-background",
+   confirmed against OpenJFX's own CustomColorDialog.java source - Modena
+   paints it plain white regardless of the dialog's own background, which is
+   why "Hue/Saturation/Brightness" etc. were unreadable even after the
+   .custom-color-dialog .label fix above: white text was landing on a
+   still-white box the earlier fix never touched). */
+.custom-color-dialog .customcolor-controls-background {
+    -fx-background-color: -deep-blue;
+}
+.custom-color-dialog .settings-label,
+.custom-color-dialog .settings-unit {
+    -fx-text-fill: -text-primary;
+}
+.custom-color-dialog .color-input-field,
+.custom-color-dialog .web-field {
+    -fx-background-color: rgba(255, 255, 255, 0.08);
+    -fx-text-fill: -text-primary;
+}
+
+/* ============================================================
+   MARKDOWN TOOLBAR (item A.1 - Add/Edit Note dialogs)
+   ============================================================ */
+.md-toolbar {
+    -fx-padding: 4 0;
+}
+.md-toolbar-button {
+    -fx-background-color: rgba(255, 255, 255, 0.06);
+    -fx-background-radius: 5px;
+    -fx-min-width: 28px;
+    -fx-pref-width: 28px;
+    -fx-alignment: center;
+    -fx-font-size: 11px;
+    -fx-font-weight: 600;
+}
+.md-toolbar-button:hover {
+    -fx-background-color: rgba(168, 235, 18, 0.15);
+    -fx-text-fill: -lime-green;
+}
+
+/* Rotate Text checkbox next to V-Spacing (item C.8) - reuses the standard
+   .check-box rules already defined for the filter checkboxes. */
+.rotate-checkbox {
+    -fx-padding: 0 0 0 4;
+}
+
+.zoom-row {
+    -fx-padding: 2 0;
+}
+.zoom-button {
+    -fx-background-color: rgba(255, 255, 255, 0.07);
+    -fx-background-radius: 6px;
+    -fx-min-width: 24px;
+    -fx-pref-width: 24px;
+    -fx-alignment: center;
+}
+.slider .track {
+    -fx-background-color: rgba(255, 255, 255, 0.1);
+    -fx-background-radius: 3px;
+    -fx-pref-height: 4px;
+}
+.slider .thumb {
+    -fx-background-color: -lime-green;
+    -fx-background-radius: 50%;
+    -fx-pref-width: 12px;
+    -fx-pref-height: 12px;
+}
+.slider .thumb:hover, .slider .thumb:pressed {
+    -fx-background-color: derive(-lime-green, 20%);
+}
+
+/* ============================================================
+   COLLAPSIBLE CATEGORY FILTER (TitledPane per category)
+   ============================================================ */
+.filter-scroll {
+    -fx-background-color: transparent;
+}
+.filter-scroll > .viewport {
+    -fx-background-color: transparent;
+}
+.filter-category-pane {
+    -fx-text-fill: -text-primary;
+}
+.filter-category-pane > .title {
+    -fx-background-color: rgba(255, 255, 255, 0.04);
+    -fx-background-radius: 6px;
+    -fx-padding: 2 6;
+}
+.filter-category-pane > .title > .text {
+    -fx-fill: -text-secondary;
+    -fx-font-family: "Poppins";
+    -fx-font-size: 11px;
+    -fx-font-weight: 600;
+}
+.filter-category-pane > .title > .arrow-button > .arrow {
+    -fx-background-color: -lime-green;
+}
+.filter-category-pane > *.content {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-padding: 4 4 8 10;
+}
+.filter-flow {
+    -fx-padding: 2 0;
+}
+
+/* ============================================================
+   CANVAS SCROLLPANE (zoomed content scrolls instead of clipping)
+   ============================================================ */
+.canvas-scroll {
+    -fx-background-color: transparent;
+}
+.canvas-scroll > .viewport {
+    -fx-background-color: transparent;
+}
+
+/* ============================================================
+   DRAG-AND-DROP SKILL REORDER LIST
+   ============================================================ */
+.list-view {
+    -fx-background-color: rgba(255, 255, 255, 0.04);
+    -fx-border-color: rgba(255, 255, 255, 0.1);
+    -fx-border-radius: 8px;
+    -fx-background-radius: 8px;
+}
+.drag-cell {
+    -fx-background-color: transparent;
+    -fx-text-fill: -text-primary;
+    -fx-font-family: "Poppins";
+    -fx-font-size: 12px;
+    -fx-padding: 8 10;
+    -fx-cursor: move;
+}
+.drag-cell:filled:hover {
+    -fx-background-color: rgba(168, 235, 18, 0.08);
+}
+.drag-cell:filled:selected {
+    -fx-background-color: rgba(168, 235, 18, 0.18);
+}
+
+/* ============================================================
+   STATUS TOGGLES — Active / Stalled (color-coding, per PRD)
+   ============================================================ */
+.status-toggle-active {
+    -fx-background-color: rgba(168, 235, 18, 0.12);
+    -fx-text-fill: -lime-green;
+    -fx-background-radius: 16px;
+    -fx-border-color: rgba(168, 235, 18, 0.3);
+    -fx-border-radius: 16px;
+    -fx-border-width: 1px;
+    -fx-font-size: 11px;
+    -fx-padding: 4 12;
+    -fx-cursor: hand;
+}
+.status-toggle-active:selected {
+    -fx-background-color: -lime-green;
+    -fx-text-fill: #0B1A2B;
+    -fx-font-weight: bold;
+}
+.status-toggle-stalled {
+    -fx-background-color: rgba(65, 79, 108, 0.3);
+    -fx-text-fill: -text-secondary;
+    -fx-background-radius: 16px;
+    -fx-border-color: rgba(65, 79, 108, 0.6);
+    -fx-border-radius: 16px;
+    -fx-border-width: 1px;
+    -fx-font-size: 11px;
+    -fx-padding: 4 12;
+    -fx-cursor: hand;
+}
+.status-toggle-stalled:selected {
+    -fx-background-color: -astronaut;
+    -fx-text-fill: -text-primary;
+    -fx-font-weight: bold;
+}
+
+.color-swatch {
+    -fx-pref-width: 18px;
+    -fx-pref-height: 18px;
+    -fx-min-width: 18px;
+    -fx-min-height: 18px;
+    -fx-max-width: 18px;
+    -fx-max-height: 18px;
+    -fx-background-radius: 9px;
+    -fx-border-radius: 9px;
+    -fx-border-color: rgba(255, 255, 255, 0.3);
+    -fx-border-width: 1px;
+    -fx-cursor: hand;
+}
+.color-swatch:hover {
+    -fx-border-color: white;
+    -fx-scale-x: 1.15;
+    -fx-scale-y: 1.15;
+}
+
+/* ============================================================
+   CALENDAR
+   ============================================================ */
+.calendar-weekday {
+    -fx-text-fill: -text-muted;
+    -fx-font-family: "Space Grotesk";
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-alignment: center;
+    -fx-pref-width: 42px;
+    -fx-padding: 0 0 6 0;
+}
+.calendar-day {
+    -fx-background-color: rgba(255, 255, 255, 0.03);
+    -fx-background-radius: 8px;
+    -fx-pref-width: 42px;
+    -fx-pref-height: 40px;
+    -fx-cursor: hand;
+}
+.calendar-day:hover {
+    -fx-background-color: rgba(168, 235, 18, 0.12);
+}
+.calendar-day-number {
+    -fx-text-fill: #C7D0DD;
+    -fx-font-family: "Poppins";
+    -fx-font-size: 12px;
+}
+.calendar-day-today {
+    -fx-border-color: -lime-green;
+    -fx-border-width: 1.5px;
+    -fx-border-radius: 8px;
+}
+/* B.5: marks a day that already has at least one logged session - a muted
+   blue-gray wash (not lime) so it reads as "has history" without being
+   mistaken for -today's lime border or -selected's lime background tint.
+   Declared BEFORE .calendar-day-selected so, if a day is both logged AND
+   selected, the more attention-worthy selected tint wins the cascade. */
+.calendar-day-logged {
+    -fx-background-color: rgba(65, 79, 108, 0.35);
+}
+.calendar-day-selected {
+    -fx-background-color: rgba(168, 235, 18, 0.22);
+}
+
+/* ============================================================
+   STICKY NOTES
+   ============================================================ */
+.sticky-note {
+    -fx-background-color: rgba(255, 255, 255, 0.05);
+    -fx-background-radius: 10px;
+    -fx-border-width: 0 0 0 3px;
+    -fx-border-radius: 10px;
+    -fx-padding: 8px;
+}
+.sticky-note-title {
+    -fx-text-fill: -text-primary;
+    -fx-font-family: "Space Grotesk";
+    -fx-font-size: 13px;
+    -fx-font-weight: 600;
+}
+.notes-scroll {
+    -fx-background-color: transparent;
+}
+.notes-scroll > .viewport {
+    -fx-background-color: transparent;
+}
+
+/* ============================================================
+   METRICS / INPUT / TOGGLE ROWS / VISUALIZATION AREA
+   ============================================================ */
+.metrics-row, .input-row, .toggle-row {
+    -fx-padding: 4 0;
+}
+.visualization-area {
+    -fx-background-color: rgba(255, 255, 255, 0.02);
+    -fx-background-radius: 14px;
+    -fx-padding: 20px;
+}
+
+.graph-toggle {
+    -fx-background-color: rgba(255, 255, 255, 0.05);
+    -fx-text-fill: -text-secondary;
+    -fx-background-radius: 20px;
+    -fx-border-radius: 20px;
+    -fx-border-color: rgba(255, 255, 255, 0.1);
+    -fx-border-width: 1px;
+    -fx-padding: 6 14;
+    -fx-font-family: "Poppins";
+    -fx-font-size: 11px;
+    -fx-cursor: hand;
+}
+.graph-toggle:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.1);
+    -fx-text-fill: -text-primary;
+}
+.graph-toggle:selected {
+    -fx-background-color: -lime-green;
+    -fx-text-fill: #0B1A2B;
+    -fx-font-weight: bold;
+    -fx-effect: dropshadow(gaussian, rgba(168, 235, 18, 0.5), 14, 0.25, 0, 0);
+}
+
+.progress-bar {
+    -fx-pref-height: 22px;
+}
+.progress-bar > .bar {
+    -fx-background-color: -lime-green;
+    -fx-background-insets: 0;
+    -fx-background-radius: 6px;
+}
+.progress-bar > .track {
+    -fx-background-color: rgba(255, 255, 255, 0.08);
+    -fx-background-radius: 6px;
+}
+
+/* ---------- Charts (default Modena theme is light; retheme for dark bg) ---------- */
+.chart {
+    -fx-background-color: transparent;
+}
+.chart-plot-background {
+    -fx-background-color: transparent;
+}
+.chart-vertical-grid-lines, .chart-horizontal-grid-lines {
+    -fx-stroke: rgba(255, 255, 255, 0.06);
+}
+.axis {
+    -fx-tick-label-fill: -text-secondary;
+    -fx-font-family: "Poppins";
+}
+.axis-label {
+    -fx-text-fill: -text-secondary;
+}
+.chart-series-line {
+    -fx-stroke: -lime-green;
+    -fx-stroke-width: 2.5px;
+}
+.chart-line-symbol {
+    -fx-background-color: -lime-green, white;
+}
+.chart-legend {
+    -fx-background-color: transparent;
+}
+
+/* ============================================================
+   FORM CONTROLS (ComboBox, Spinner, TextField, TextArea)
+   ============================================================ */
+.combo-box, .spinner, .text-field, .text-area {
+    -fx-background-color: rgba(255, 255, 255, 0.08);
+    -fx-text-fill: -text-primary;
+    -fx-prompt-text-fill: rgba(231, 236, 243, 0.4);
+    -fx-background-radius: 8px;
+    -fx-border-color: rgba(255, 255, 255, 0.12);
+    -fx-border-radius: 8px;
+    -fx-border-width: 1px;
+    -fx-font-family: "Poppins";
+}
+.combo-box .list-cell, .spinner .text-field, .text-area .content {
+    -fx-text-fill: -text-primary;
+    -fx-background-color: transparent;
+}
+.combo-box-popup .list-view {
+    -fx-background-color: #16263A;
+    -fx-border-color: -glass-border;
+}
+.combo-box-popup .list-cell {
+    -fx-background-color: transparent;
+    -fx-text-fill: -text-primary;
+    -fx-padding: 6 10;
+}
+/* ITEM 2 REVISI: fix sebelumnya pakai child combinator ">" - DatePicker
+   modern (DatePickerSkin) mewarisi base skin yang sama dengan ComboBox
+   (ComboBoxPopupControl), yang biasanya membungkus text-field-nya di dalam
+   container tambahan, jadi kemungkinan besar bukan direct child dan rule
+   ">" itu tidak pernah match sama sekali. Descendant selector (spasi)
+   match di kedalaman berapa pun. Kali ini teks dibuat GELAP (bukan
+   terang) - tidak lagi memaksa background gelap yang sepertinya kalah
+   dari default Modena; menyelaraskan teks dengan background terang yang
+   memang sudah menang, bukan melawannya lagi. */
+.date-picker .text-field {
+    -fx-text-fill: -deep-blue;
+    -fx-prompt-text-fill: rgba(11, 26, 43, 0.5);
+}
+.combo-box-popup .list-cell:hover,
+.combo-box-popup .list-cell:filled:selected {
+    -fx-background-color: rgba(168, 235, 18, 0.18);
+}
+.spinner .increment-arrow-button, .spinner .decrement-arrow-button {
+    -fx-background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* ============================================================
+   STATUS BAR
+   ============================================================ */
+.status-bar {
+    -fx-background-color: rgba(255, 255, 255, 0.02);
+}
+.status-bar-label {
+    -fx-text-fill: -text-muted;
+    -fx-font-family: "Poppins";
+    -fx-font-size: 11px;
+}
+
+/* ============================================================
+   SCROLLBARS — restyled so they don't show the light default theme
+   ============================================================ */
+.scroll-pane, .scroll-pane > .viewport {
+    -fx-background-color: transparent;
+}
+.scroll-bar:vertical, .scroll-bar:horizontal {
+    -fx-background-color: transparent;
+}
+.scroll-bar .thumb {
+    -fx-background-color: rgba(168, 235, 18, 0.35);
+    -fx-background-radius: 6px;
+}
+.scroll-bar .thumb:hover {
+    -fx-background-color: rgba(168, 235, 18, 0.6);
+}
+.scroll-bar .track {
+    -fx-background-color: transparent;
+}
+.scroll-bar .increment-button, .scroll-bar .decrement-button {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+
+/* ============================================================
+   DIALOGS (Add Skill / Add Note / Alerts) — reuse the glass look
+   ============================================================ */
+.dialog-pane {
+    -fx-background-color: -deep-blue;
+}
+.dialog-pane > .button-bar > .container {
+    -fx-background-color: transparent;
+}
+.dialog-pane .content.label {
+    -fx-text-fill: -text-primary;
+}
+.dialog-pane .header-panel {
+    -fx-background-color: rgba(255, 255, 255, 0.04);
+}

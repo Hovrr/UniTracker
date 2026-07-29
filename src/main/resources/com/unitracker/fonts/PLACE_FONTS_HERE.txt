@@ -1,0 +1,36 @@
+This folder is where MainApp.loadCustomFonts() looks for the two typefaces
+the design spec calls for. Font FILES themselves are binary and can't be
+generated as source code, so grab them (they're free, open-license) and
+drop the .ttf files directly in this folder:
+
+  Space Grotesk (Titles / Metrics)
+    https://fonts.google.com/specimen/Space+Grotesk
+    -> download family, then copy these two files here:
+         SpaceGrotesk-Regular.ttf
+         SpaceGrotesk-Bold.ttf
+
+  Poppins (Body / Notes)
+    https://fonts.google.com/specimen/Poppins
+    -> download family, then copy these three files here:
+         Poppins-Regular.ttf
+         Poppins-Medium.ttf
+         Poppins-SemiBold.ttf
+
+After placing them, this folder should look like:
+
+  fonts/
+    SpaceGrotesk-Regular.ttf
+    SpaceGrotesk-Bold.ttf
+    Poppins-Regular.ttf
+    Poppins-Medium.ttf
+    Poppins-SemiBold.ttf
+
+You can delete this .txt file once the real fonts are in place - it isn't
+referenced by any code.
+
+NOTE: the app runs perfectly fine without doing this step. MainApp checks
+each file with getResourceAsStream() and silently falls back to your OS's
+default UI font if a file isn't found (see the console log for
+"[Fonts] Not found, using platform default instead: ..." if you want to
+confirm which ones loaded). Styling-wise nothing breaks either way - it's
+a nice-to-have visual polish step, not a functional requirement.

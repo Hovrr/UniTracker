@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Binds NetBeans' green Run / Debug buttons (and their right-click-project
+    equivalents) straight to the javafx-maven-plugin's "run" goal, which is
+    what actually launches this app correctly (see the plugin comment in
+    pom.xml - plain "exec" / a manifest Main-Class is not enough for JavaFX
+    on JDK 11+ without this). Without this file, NetBeans' default Run
+    action does not know how to start a javafx-maven-plugin project, and
+    every run/debug requires manually typing the Maven goal each time.
+--><actions>
+    <action>
+        <actionName>run</actionName>
+        <goals>
+            <goal>javafx:run</goal>
+            
+        </goals>
+    </action>
+    <action>
+        <actionName>debug</actionName>
+        <goals>
+            <goal>process-classes</goal>
+            <goal>org.openjfx:javafx-maven-plugin:run</goal>
+        </goals>
+        <properties>
+            <jpda.listen>true</jpda.listen>
+        </properties>
+    </action>
+</actions>
