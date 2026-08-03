@@ -8,6 +8,7 @@ nbbuild/
 dist/
 nbdist/
 .nb-gradle/
+dependency-reduced-pom.xml
 
 # Java / Compiled class file
 *.class
@@ -22,7 +23,7 @@ nbdist/
 ehthumbs.db
 Thumbs.db
 
-# UniTracker Specific (Jangan upload database history pribadimu)
+# UniTracker Specific
 *.db
 *.utrack
 
