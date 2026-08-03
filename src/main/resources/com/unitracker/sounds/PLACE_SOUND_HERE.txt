@@ -1,0 +1,20 @@
+Place four short UI sound effects here (real PCM .wav files, NOT .mp3):
+
+    general_click.wav       — ordinary button press
+    log_session.wav         — logging a progress entry
+    timer_finish.wav        — focus timer completes
+    level_up_confetti.wav   — level threshold crossed
+
+MUST BE .wav - NOT .mp3:
+Playback goes through javafx.scene.media.AudioClip, which reads WAV, AU and AIFF.
+It does NOT read MP3 without platform codecs that may not be installed.
+
+Keep them short (under 2 seconds) and at a moderate volume. They fire the moment
+the action happens, so the sound only needs to confirm the press or outcome - a
+brief click or chime is enough.
+
+If a file is absent the app still works exactly the same - the sound is skipped
+and a note is printed to stdout. See util/SoundPlayer.java for the logic.
+
+Zero-budget sources for public-domain / CC0 sounds: freesound.org (filter license
+to CC0), or generate one locally with Audacity (Generate > Tone, then fade out).

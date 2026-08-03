@@ -65,6 +65,17 @@
             <artifactId>javafx-swing</artifactId>
             <version>${javafx.version}</version>
         </dependency>
+        <!-- javafx-media backs util/SoundPlayer (AudioClip) for UI sound effects.
+             It was ALREADY on the classpath transitively via javafx-web's POM, so
+             declaring it adds no download - but relying on another artifact's
+             transitive graph for a class we import directly is how builds break
+             silently later. Note javafx.web does not *require* javafx.media as a
+             module, so it must also appear in add-modules below. -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-media</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
 
         <!-- ===== SQLite (fully offline, embedded, zero-config) ===== -->
         <dependency>
@@ -110,13 +121,18 @@
                 <version>${javafx.maven.plugin.version}</version>
                 <configuration>
                     <mainClass>${mainClass}</mainClass>
-                    <!-- javafx.web (WebView) and javafx.swing (SwingFXUtils, used by
-                         PDF export) both need to be added explicitly - neither is a
-                         transitive dependency of javafx-controls/-fxml, and optional
-                         JavaFX modules aren't auto-included by the plugin's module path. -->
+                    <!-- javafx.web (WebView), javafx.swing (SwingFXUtils, used by
+                         PDF export) and javafx.media (AudioClip, used by
+                         util/SoundPlayer) all need to be added explicitly - none is
+                         a transitive dependency of javafx-controls/-fxml, and optional
+                         JavaFX modules aren't auto-included by the plugin's module path.
+                         javafx.media in particular is NOT implied by javafx.web:
+                         javafx-web's Maven POM depends on javafx-media, but the
+                         javafx.web *module* does not require it. Drop it here and
+                         SoundPlayer dies with NoClassDefFoundError at runtime. -->
                     <options>
                         <option>--add-modules</option>
-                        <option>javafx.web,javafx.swing</option>
+                        <option>javafx.web,javafx.swing,javafx.media</option>
                     </options>
                 </configuration>
             </plugin>
@@ -172,6 +188,18 @@
                 <dependency>
                     <groupId>org.openjfx</groupId>
                     <artifactId>javafx-swing</artifactId>
+                    <version>${javafx.version}</version>
+                    <classifier>win</classifier>
+                </dependency>
+                <!-- Needed here too, and for a different reason than in the main
+                     dependency block: this profile pins the Windows-native
+                     classifier per module. Without an explicit -win javafx-media,
+                     the fat jar would carry the media CLASSES but not the native
+                     jfxmedia DLLs, so AudioClip would fail only in the built .exe
+                     and work fine under mvn javafx:run - the worst kind of bug. -->
+                <dependency>
+                    <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-media</artifactId>
                     <version>${javafx.version}</version>
                     <classifier>win</classifier>
                 </dependency>

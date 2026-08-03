@@ -13,34 +13,27 @@ import java.util.List;
  * 10 days removes all 10 - not just the last one, which is what looping
  * individual LogProgressCommands would have done.
  * <p>
- * previousPoints is captured once, up front, exactly like
- * LogProgressCommand - undo restores that exact original value rather than
- * subtracting the batch's total, so it stays correct even if the skill was
- * edited again in between execute() and a much-later undo().
+ * The batch total rolls up to every ancestor in one shot via
+ * {@link PointRollup}, and undo applies the exact negation.
  */
 public class BatchLogProgressCommand implements Command {
 
     private final DatabaseHelper db;
     private final Skill skill;
+    private final List<Skill> allSkills;
     private final List<ProgressLog> logs;
-    private final double previousPoints;
 
-    public BatchLogProgressCommand(DatabaseHelper db, Skill skill, List<ProgressLog> logs) {
+    public BatchLogProgressCommand(DatabaseHelper db, Skill skill, List<Skill> allSkills, List<ProgressLog> logs) {
         this.db = db;
         this.skill = skill;
+        this.allSkills = allSkills;
         this.logs = logs;
-        this.previousPoints = skill.getCurrentPoints();
     }
 
     @Override
     public void execute() {
         db.insertProgressLogBatch(logs); // one SQLite transaction - all land, or none do
-        double total = 0;
-        for (ProgressLog log : logs) {
-            total += log.getPointsEarned();
-        }
-        skill.setCurrentPoints(skill.getCurrentPoints() + total);
-        db.updateSkill(skill);
+        PointRollup.apply(db, allSkills, skill.getId(), totalPoints());
     }
 
     @Override
@@ -50,7 +43,14 @@ public class BatchLogProgressCommand implements Command {
                 db.deleteProgressLog(log.getId());
             }
         }
-        skill.setCurrentPoints(previousPoints);
-        db.updateSkill(skill);
+        PointRollup.apply(db, allSkills, skill.getId(), -totalPoints());
+    }
+
+    private double totalPoints() {
+        double total = 0;
+        for (ProgressLog log : logs) {
+            total += log.getPointsEarned();
+        }
+        return total;
     }
 }

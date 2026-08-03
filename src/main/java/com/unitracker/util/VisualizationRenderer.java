@@ -3,12 +3,14 @@ package com.unitracker.util;
 import com.unitracker.model.Skill;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.paint.Color;
+import javafx.scene.shape.ArcType;
 import javafx.scene.text.Font;
 import javafx.scene.text.Text;
 import javafx.scene.text.TextAlignment;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -33,8 +35,20 @@ public final class VisualizationRenderer {
     private static final Color BREADTH_BAR = Color.web("#414F6C");
     private static final Color LIME = Color.web("#A8EB12");
 
+    /** Skill Decay: a stalled skill is drawn in this muted red-grey instead of
+     *  its own colour, so "I've abandoned this" is visible at a glance in every
+     *  bar/node view without having to click through each skill's status. */
+    private static final Color STALLED_COLOR = Color.web("#7A5C68");
+
     private VisualizationRenderer() {
         // Static utility class - no instances.
+    }
+
+    /** Single source of truth for "what colour is this skill drawn in" -
+     *  its own colour when active, the stalled tint when decayed. Every
+     *  renderer goes through here so no view can disagree with another. */
+    private static Color barColor(Skill skill) {
+        return skill.isActive() ? Color.web(skill.getColorHex()) : STALLED_COLOR;
     }
 
     // =================================================================
@@ -55,10 +69,10 @@ public final class VisualizationRenderer {
         double depth = skill.progressProperty().get();
         double barHeight = (baseY - topY) * depth;
 
-        gc.setFill(Color.web(skill.getColorHex()));
+        gc.setFill(barColor(skill));
         gc.fillRoundRect(x, baseY - barHeight, barWidth, barHeight, 8, 8);
         gc.setFill(TEXT_PRIMARY);
-        gc.fillText(skill.getName(), x - 10, baseY + 20);
+        gc.fillText(skill.getName() + (skill.isActive() ? "" : "  (stalled)"), x - 10, baseY + 20);
     }
 
     // =================================================================
@@ -104,7 +118,7 @@ public final class VisualizationRenderer {
             double barHeight = deep ? (baseY - topY) * progress : 6;
             double x = spacing * index - barWidth / 2;
 
-            gc.setFill(Color.web(s.getColorHex()));
+            gc.setFill(barColor(s));
             gc.fillRoundRect(x, baseY - barHeight, barWidth, barHeight, 8, 8);
 
             if (rotateLabels) {
@@ -239,7 +253,7 @@ public final class VisualizationRenderer {
         double progress = node.progressProperty().get();
         double nodeRadius = isBranch ? 9 : (6 + progress * 10); // 6..16px for leaves, fixed 9px for branches
 
-        gc.setFill(isBranch ? BREADTH_BAR : Color.web(node.getColorHex()));
+        gc.setFill(isBranch ? BREADTH_BAR : barColor(node));
         gc.fillOval(x - nodeRadius, y - nodeRadius, nodeRadius * 2, nodeRadius * 2);
         if (!isBranch && !node.isActive()) {
             gc.setStroke(Color.web("#0B1A2B"));
@@ -342,10 +356,101 @@ public final class VisualizationRenderer {
         gc.stroke();
 
         for (int i = 0; i < n; i++) {
-            gc.setFill(Color.web(filteredSkills.get(i).getColorHex()));
+            gc.setFill(barColor(filteredSkills.get(i)));
             gc.fillOval(xs[i] - 4, ys[i] - 4, 8, 8);
         }
     }
+
+    // =================================================================
+    //  TIME DISTRIBUTION PIE  (zero-budget maximizer #2)
+    // =================================================================
+
+    /**
+     * "Where does my time actually go?" - minutes invested per root Category,
+     * as a donut. Answers a different question from the points charts: points
+     * are self-assigned and can be gamed, minutes are what you really spent.
+     *
+     * <p>Drawn on the existing Canvas rather than added as a JavaFX PieChart
+     * node, so it inherits the zoom/pan/export plumbing every other structural
+     * view already has for free.
+     *
+     * @param minutesPerCategory category name -> minutes, biggest first
+     *                           (DatabaseHelper#getMinutesPerRootCategory).
+     */
+    public static void renderTimePie(GraphicsContext gc, double w, double h,
+                                     Map<String, Integer> minutesPerCategory) {
+        gc.clearRect(0, 0, w, h);
+        if (minutesPerCategory == null || minutesPerCategory.isEmpty()) {
+            drawPlaceholder(gc, w, h, "No time logged yet - log a session with minutes to see the split.");
+            return;
+        }
+
+        long totalMinutes = 0;
+        for (int m : minutesPerCategory.values()) totalMinutes += m;
+        if (totalMinutes <= 0) {
+            drawPlaceholder(gc, w, h, "No time logged yet.");
+            return;
+        }
+
+        double cx = w * 0.36;
+        double cy = h / 2;
+        double radius = Math.min(w * 0.30, h * 0.36);
+        double innerRadius = radius * 0.55; // donut hole - leaves room for the total
+
+        gc.setFont(Font.font("Poppins", 11));
+        double startAngle = 90; // 12 o'clock; JavaFX arcs sweep counter-clockwise
+        int index = 0;
+        double legendY = cy - radius;
+
+        for (Map.Entry<String, Integer> entry : minutesPerCategory.entrySet()) {
+            double share = entry.getValue() / (double) totalMinutes;
+            double extent = -share * 360; // negative = clockwise, so slices read left-to-right
+            Color slice = PIE_PALETTE[index % PIE_PALETTE.length];
+
+            gc.setFill(slice);
+            gc.fillArc(cx - radius, cy - radius, radius * 2, radius * 2, startAngle, extent, ArcType.ROUND);
+            startAngle += extent;
+
+            // Legend beside the donut, not on it: slice labels overlap badly
+            // once any category drops below ~5%.
+            gc.setFill(slice);
+            gc.fillRoundRect(cx + radius + 24, legendY, 11, 11, 3, 3);
+            gc.setFill(TEXT_PRIMARY);
+            gc.fillText(entry.getKey(), cx + radius + 42, legendY + 10);
+            gc.setFill(TEXT_SECONDARY);
+            gc.fillText(formatHours(entry.getValue()) + "  ·  " + Math.round(share * 100) + "%",
+                    cx + radius + 42, legendY + 24);
+            legendY += 34;
+            index++;
+        }
+
+        // Punch the donut hole with the panel background, then centre the total in it.
+        gc.setFill(Color.web("#16263A"));
+        gc.fillOval(cx - innerRadius, cy - innerRadius, innerRadius * 2, innerRadius * 2);
+
+        gc.setFill(TEXT_PRIMARY);
+        gc.setFont(Font.font("Space Grotesk", 16));
+        String totalText = formatHours(totalMinutes);
+        gc.fillText(totalText, cx - measureTextWidth(totalText, gc.getFont()) / 2, cy);
+        gc.setFill(TEXT_SECONDARY);
+        gc.setFont(Font.font("Poppins", 10));
+        gc.fillText("total", cx - measureTextWidth("total", gc.getFont()) / 2, cy + 16);
+    }
+
+    /** 90 -> "1h 30m", 45 -> "45m". Raw minute counts get unreadable fast
+     *  once a category passes a few hundred. */
+    private static String formatHours(long minutes) {
+        if (minutes < 60) return minutes + "m";
+        long h = minutes / 60;
+        long m = minutes % 60;
+        return m == 0 ? h + "h" : h + "h " + m + "m";
+    }
+
+    private static final Color[] PIE_PALETTE = {
+            Color.web("#A8EB12"), Color.web("#008793"), Color.web("#4CC9F0"),
+            Color.web("#9B5DE5"), Color.web("#FF8552"), Color.web("#FFD23F"),
+            Color.web("#F72585"), Color.web("#414F6C")
+    };
 
     // =================================================================
     //  HELPERS

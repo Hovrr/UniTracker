@@ -16,6 +16,7 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -77,9 +78,11 @@ public class DatabaseHelper {
                 st.execute(CREATE_PROGRESS_LOGS_TABLE);
                 st.execute(CREATE_CALENDAR_NOTES_TABLE);
                 st.execute(CREATE_APP_SETTINGS_TABLE);
+                st.execute(CREATE_PROGRESS_LOGS_DATE_INDEX);
             }
             migrateAddSortOrderColumnIfMissing();
             migrateAddParentIdColumnIfMissing();
+            migrateAddIsPinnedColumnIfMissing();
             migrateFlatCategoriesToHierarchyIfNeeded();
             seedSampleDataIfEmpty();
             System.out.println("[DatabaseHelper] SQLite ready at " + DB_FILE);
@@ -168,6 +171,17 @@ public class DatabaseHelper {
     private void migrateAddParentIdColumnIfMissing() {
         try (Statement st = connection.createStatement()) {
             st.execute("ALTER TABLE skills ADD COLUMN parent_id INTEGER REFERENCES skills(id);");
+        } catch (SQLException alreadyExists) {
+            // Expected after the first run - the column is already there.
+        }
+    }
+
+    /** Same idiom again, for the "Universal / Pinned Notes" feature: a pinned
+     *  note is shown above the day list no matter which calendar date is
+     *  selected, so it needs its own flag rather than a magic note_date. */
+    private void migrateAddIsPinnedColumnIfMissing() {
+        try (Statement st = connection.createStatement()) {
+            st.execute("ALTER TABLE calendar_notes ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0;");
         } catch (SQLException alreadyExists) {
             // Expected after the first run - the column is already there.
         }
@@ -273,6 +287,16 @@ public class DatabaseHelper {
             );
             """;
 
+    /** The velocity chart filters progress_logs by log_date (BETWEEN). SQLite has
+     *  no implicit index on that column, so without this every range query is a
+     *  full table scan - harmless at 100 rows, a real drag at a 12-month span
+     *  with thousands of sessions. IF NOT EXISTS + standalone keeps it safe for
+     *  existing databases, which are never re-created. */
+    private static final String CREATE_PROGRESS_LOGS_DATE_INDEX = """
+            CREATE INDEX IF NOT EXISTS idx_progress_logs_log_date
+            ON progress_logs(log_date);
+            """;
+
     private static final String CREATE_CALENDAR_NOTES_TABLE = """
             CREATE TABLE IF NOT EXISTS calendar_notes (
                 id                 INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -283,6 +307,7 @@ public class DatabaseHelper {
                 color_hex          TEXT NOT NULL DEFAULT '#414F6C',
                 status             TEXT NOT NULL DEFAULT 'ACTIVE',
                 is_completed       INTEGER NOT NULL DEFAULT 0,
+                is_pinned          INTEGER NOT NULL DEFAULT 0,
                 sort_order         INTEGER NOT NULL DEFAULT 0,
                 created_at         TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (skill_id) REFERENCES skills(id) ON DELETE SET NULL
@@ -730,6 +755,324 @@ public class DatabaseHelper {
         return dates;
     }
 
+    // =================================================================
+    //  BOTTOM-UP POINT ACCUMULATION
+    // =================================================================
+
+    /**
+     * Every ancestor of {@code skillId}, nearest parent first, excluding the
+     * skill itself. Walked in SQL via parent_id because the flat list the
+     * controller holds (getAllSkills) has a null {@code parent} field - only
+     * getSkillTree() wires those up, and the log dialog doesn't use the tree.
+     *
+     * <p>Guarded with a depth LIMIT so a corrupt parent_id cycle degrades to a
+     * short list instead of hanging the UI thread forever.
+     */
+    public List<Integer> getAncestorIds(int skillId) {
+        List<Integer> ancestors = new ArrayList<>();
+        String sql = """
+                WITH RECURSIVE chain(id, parent_id, depth) AS (
+                    SELECT id, parent_id, 0 FROM skills WHERE id = ?
+                    UNION ALL
+                    SELECT s.id, s.parent_id, chain.depth + 1
+                    FROM skills s JOIN chain ON s.id = chain.parent_id
+                    WHERE chain.depth < 64
+                )
+                SELECT id FROM chain WHERE depth > 0 ORDER BY depth ASC;
+                """;
+        try (PreparedStatement ps = getConnection().prepareStatement(sql)) {
+            ps.setInt(1, skillId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) ancestors.add(rs.getInt("id"));
+            }
+        } catch (SQLException e) {
+            System.err.println("[DatabaseHelper] getAncestorIds failed: " + e.getMessage());
+        }
+        return ancestors;
+    }
+
+    /**
+     * Adds {@code delta} to current_points of the given skill AND every
+     * ancestor above it, in one transaction - the core of "logging to a
+     * Subskill also credits its Main Skill and its Category".
+     *
+     * <p>Relative (+= delta) rather than absolute, so passing a negative delta
+     * is an exact inverse - that's what makes undo correct without snapshotting
+     * every ancestor's prior value.
+     *
+     * <p>current_points is clamped at 0 so a rounding-drift undo can't push a
+     * skill negative. Note this makes the operation non-invertible only in the
+     * already-broken case where points were negative to begin with.
+     *
+     * @return the ids actually touched (skill + ancestors), for the caller's log.
+     */
+    public List<Integer> addPointsWithRollup(int skillId, double delta) {
+        List<Integer> affected = new ArrayList<>();
+        affected.add(skillId);
+        affected.addAll(getAncestorIds(skillId));
+        if (delta == 0.0) return affected;
+
+        String sql = "UPDATE skills SET current_points = MAX(0, current_points + ?) WHERE id = ?;";
+        boolean previousAutoCommit = true;
+        try {
+            Connection conn = getConnection();
+            previousAutoCommit = conn.getAutoCommit();
+            conn.setAutoCommit(false);
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                for (Integer id : affected) {
+                    ps.setDouble(1, delta);
+                    ps.setInt(2, id);
+                    ps.addBatch();
+                }
+                ps.executeBatch();
+                conn.commit();
+            } catch (SQLException e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(previousAutoCommit);
+            }
+        } catch (SQLException e) {
+            System.err.println("[DatabaseHelper] addPointsWithRollup failed: " + e.getMessage());
+        }
+        return affected;
+    }
+
+    /** Re-reads current_points for a set of ids, so the in-memory Skill objects
+     *  can be synced after a rollup without reloading the entire tree. */
+    public Map<Integer, Double> getCurrentPointsFor(List<Integer> skillIds) {
+        Map<Integer, Double> points = new LinkedHashMap<>();
+        if (skillIds == null || skillIds.isEmpty()) return points;
+        StringBuilder sql = new StringBuilder("SELECT id, current_points FROM skills WHERE id IN (");
+        sql.append("?,".repeat(skillIds.size()));
+        sql.setLength(sql.length() - 1);
+        sql.append(");");
+        try (PreparedStatement ps = getConnection().prepareStatement(sql.toString())) {
+            for (int i = 0; i < skillIds.size(); i++) {
+                ps.setInt(i + 1, skillIds.get(i));
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) points.put(rs.getInt("id"), rs.getDouble("current_points"));
+            }
+        } catch (SQLException e) {
+            System.err.println("[DatabaseHelper] getCurrentPointsFor failed: " + e.getMessage());
+        }
+        return points;
+    }
+
+    // =================================================================
+    //  ANALYTICS  (heatmap, streaks, decay, velocity, level, pie)
+    //  Every one of these is a plain local SQLite aggregate - no service,
+    //  no cache, no background thread. They're cheap enough to just re-run
+    //  on refresh, which is also why "Refresh" can be a one-liner.
+    // =================================================================
+
+    /**
+     * Total points earned per calendar day, ascending. Single source for BOTH
+     * the GitHub-style heatmap and the Velocity line chart - the heatmap reads
+     * the whole map, Velocity slices the last N days off the end.
+     *
+     * <p>Deliberately SUM(points_earned) rather than COUNT(*): two 1-point
+     * sessions and one 2-point session should shade the same.
+     */
+    /**
+     * Same aggregate as {@link #getPointsPerDay()}, but bounded to a date range
+     * so the velocity chart never loads more rows than it plots.
+     *
+     * <p>Both bounds are INCLUSIVE. log_date is stored as ISO-8601 TEXT
+     * ('2026-08-03'), which sorts lexicographically in the same order it sorts
+     * chronologically - that is what makes a plain BETWEEN on a TEXT column
+     * both correct and index-friendly here.
+     *
+     * @param start first day to include, inclusive
+     * @param end   last day to include, inclusive
+     */
+    public Map<LocalDate, Double> getPointsPerDay(LocalDate start, LocalDate end) {
+        Map<LocalDate, Double> perDay = new LinkedHashMap<>();
+        String sql = """
+                SELECT log_date, SUM(points_earned) AS pts
+                FROM progress_logs
+                WHERE log_date BETWEEN ? AND ?
+                GROUP BY log_date
+                ORDER BY log_date ASC;
+                """;
+        try (PreparedStatement ps = getConnection().prepareStatement(sql)) {
+            ps.setString(1, start.toString());
+            ps.setString(2, end.toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    perDay.put(LocalDate.parse(rs.getString("log_date")), rs.getDouble("pts"));
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("[DatabaseHelper] getPointsPerDay(range) failed: " + e.getMessage());
+        }
+        return perDay;
+    }
+
+    /**
+     * Every day that has logged points, unbounded.
+     *
+     * <p>Still used by the calendar heatmap, which colours whatever month the
+     * user browses to and therefore cannot pre-declare a range. The velocity
+     * chart uses the bounded overload above instead.
+     */
+    public Map<LocalDate, Double> getPointsPerDay() {
+        Map<LocalDate, Double> perDay = new LinkedHashMap<>();
+        String sql = """
+                SELECT log_date, SUM(points_earned) AS pts
+                FROM progress_logs
+                GROUP BY log_date
+                ORDER BY log_date ASC;
+                """;
+        try (Statement st = getConnection().createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                perDay.put(LocalDate.parse(rs.getString("log_date")), rs.getDouble("pts"));
+            }
+        } catch (SQLException e) {
+            System.err.println("[DatabaseHelper] getPointsPerDay failed: " + e.getMessage());
+        }
+        return perDay;
+    }
+
+    /**
+     * Current and longest consecutive-day logging streak, as {current, longest}.
+     *
+     * <p>Classic gaps-and-islands: subtracting a row number from the date turns
+     * every run of consecutive days into a constant, so GROUP BY that constant
+     * yields one row per streak. Done in SQL (window function, SQLite 3.25+)
+     * rather than by loading every log row into Java.
+     *
+     * @param today the reference day - passed in rather than assumed, because
+     *              the calendar supports right-clicking to mock "today", and a
+     *              streak that disagrees with the highlighted day looks broken.
+     *              A streak still counts as "current" if the last logged day
+     *              was yesterday - you haven't broken it until a day fully passes.
+     */
+    public int[] getStreaks(LocalDate today) {
+        String sql = """
+                WITH days AS (SELECT DISTINCT log_date FROM progress_logs),
+                     grouped AS (
+                         SELECT log_date,
+                                julianday(log_date) - ROW_NUMBER() OVER (ORDER BY log_date) AS streak_key
+                         FROM days
+                     )
+                SELECT COUNT(*) AS length, MAX(log_date) AS last_day
+                FROM grouped
+                GROUP BY streak_key;
+                """;
+        int longest = 0;
+        int current = 0;
+        try (Statement st = getConnection().createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                int length = rs.getInt("length");
+                LocalDate lastDay = LocalDate.parse(rs.getString("last_day"));
+                longest = Math.max(longest, length);
+                if (lastDay.equals(today) || lastDay.equals(today.minusDays(1))) {
+                    current = length;
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("[DatabaseHelper] getStreaks failed: " + e.getMessage());
+        }
+        return new int[]{current, longest};
+    }
+
+    /**
+     * Last day of activity for every skill, where "activity" includes the
+     * whole subtree beneath it - a Category isn't stalled just because you log
+     * against its Subskills instead of the Category row itself.
+     *
+     * <p>Falls back to the skill's own created_at when nothing has ever been
+     * logged, so a skill added two months ago and never touched correctly
+     * reads as decayed instead of permanently fresh.
+     *
+     * @return skill id -> last activity date. Used by
+     *         DashboardController#applyStalledStatuses to flip ACTIVE/STALLED.
+     */
+    public Map<Integer, LocalDate> getLastActivityPerSkill() {
+        Map<Integer, LocalDate> lastActivity = new LinkedHashMap<>();
+        String sql = """
+                WITH RECURSIVE subtree(root_id, node_id) AS (
+                    SELECT id, id FROM skills
+                    UNION ALL
+                    SELECT subtree.root_id, s.id
+                    FROM skills s JOIN subtree ON s.parent_id = subtree.node_id
+                )
+                SELECT subtree.root_id AS skill_id,
+                       COALESCE(MAX(l.log_date), date(MAX(sk.created_at))) AS last_day
+                FROM subtree
+                JOIN skills sk ON sk.id = subtree.root_id
+                LEFT JOIN progress_logs l ON l.skill_id = subtree.node_id
+                GROUP BY subtree.root_id;
+                """;
+        try (Statement st = getConnection().createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                String day = rs.getString("last_day");
+                if (day == null) continue;
+                lastActivity.put(rs.getInt("skill_id"), LocalDate.parse(day));
+            }
+        } catch (SQLException e) {
+            System.err.println("[DatabaseHelper] getLastActivityPerSkill failed: " + e.getMessage());
+        }
+        return lastActivity;
+    }
+
+    /** Total points ever logged - drives the Level / Badge milestones.
+     *  Read from progress_logs rather than SUM(skills.current_points),
+     *  which would double-count now that points roll up to ancestors. */
+    public double getTotalLoggedPoints() {
+        String sql = "SELECT COALESCE(SUM(points_earned), 0) AS total FROM progress_logs;";
+        try (Statement st = getConnection().createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            if (rs.next()) return rs.getDouble("total");
+        } catch (SQLException e) {
+            System.err.println("[DatabaseHelper] getTotalLoggedPoints failed: " + e.getMessage());
+        }
+        return 0.0;
+    }
+
+    /**
+     * Minutes invested per ROOT category, for the "Where does my time go?"
+     * pie chart. Same recursive walk as getLastActivityPerSkill, but rolled up
+     * to roots only (parent_id IS NULL, or the -1 sentinel this schema also
+     * accepts) so the pie has a handful of readable slices rather than one per
+     * leaf.
+     *
+     * @return category name -> total minutes, biggest first. Categories with
+     *         zero logged minutes are omitted - an empty slice is just noise.
+     */
+    public Map<String, Integer> getMinutesPerRootCategory() {
+        Map<String, Integer> perCategory = new LinkedHashMap<>();
+        String sql = """
+                WITH RECURSIVE subtree(root_id, node_id) AS (
+                    SELECT id, id FROM skills WHERE parent_id IS NULL OR parent_id = -1
+                    UNION ALL
+                    SELECT subtree.root_id, s.id
+                    FROM skills s JOIN subtree ON s.parent_id = subtree.node_id
+                )
+                SELECT sk.name AS category, COALESCE(SUM(l.minutes_spent), 0) AS minutes
+                FROM subtree
+                JOIN skills sk ON sk.id = subtree.root_id
+                LEFT JOIN progress_logs l ON l.skill_id = subtree.node_id
+                GROUP BY subtree.root_id
+                HAVING minutes > 0
+                ORDER BY minutes DESC;
+                """;
+        try (Statement st = getConnection().createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                perCategory.put(rs.getString("category"), rs.getInt("minutes"));
+            }
+        } catch (SQLException e) {
+            System.err.println("[DatabaseHelper] getMinutesPerRootCategory failed: " + e.getMessage());
+        }
+        return perCategory;
+    }
+
     private ProgressLog mapRowToLog(ResultSet rs) throws SQLException {
         ProgressLog log = new ProgressLog();
         log.setId(rs.getInt("id"));
@@ -747,8 +1090,8 @@ public class DatabaseHelper {
 
     public int insertNote(CalendarNote note) {
         String sql = """
-                INSERT INTO calendar_notes(skill_id, note_date, title, content_markdown, color_hex, status, is_completed)
-                VALUES (?,?,?,?,?,?,?);
+                INSERT INTO calendar_notes(skill_id, note_date, title, content_markdown, color_hex, status, is_completed, is_pinned)
+                VALUES (?,?,?,?,?,?,?,?);
                 """;
         try (PreparedStatement ps = getConnection().prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             if (note.getSkillId() == null) ps.setNull(1, Types.INTEGER); else ps.setInt(1, note.getSkillId());
@@ -758,6 +1101,7 @@ public class DatabaseHelper {
             ps.setString(5, note.getColorHex());
             ps.setString(6, note.getStatus());
             ps.setInt(7, note.isCompleted() ? 1 : 0);
+            ps.setInt(8, note.isPinned() ? 1 : 0);
             ps.executeUpdate();
             try (ResultSet keys = ps.getGeneratedKeys()) {
                 if (keys.next()) {
@@ -775,7 +1119,7 @@ public class DatabaseHelper {
     public boolean updateNote(CalendarNote note) {
         String sql = """
                 UPDATE calendar_notes SET skill_id=?, note_date=?, title=?, content_markdown=?,
-                       color_hex=?, status=?, is_completed=? WHERE id=?;
+                       color_hex=?, status=?, is_completed=?, is_pinned=? WHERE id=?;
                 """;
         try (PreparedStatement ps = getConnection().prepareStatement(sql)) {
             if (note.getSkillId() == null) ps.setNull(1, Types.INTEGER); else ps.setInt(1, note.getSkillId());
@@ -785,12 +1129,69 @@ public class DatabaseHelper {
             ps.setString(5, note.getColorHex());
             ps.setString(6, note.getStatus());
             ps.setInt(7, note.isCompleted() ? 1 : 0);
-            ps.setInt(8, note.getId());
+            ps.setInt(8, note.isPinned() ? 1 : 0);
+            ps.setInt(9, note.getId());
             return ps.executeUpdate() > 0;
         } catch (SQLException e) {
             System.err.println("[DatabaseHelper] updateNote failed: " + e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * Universal / "Pinned" notes: shown above the day list regardless of which
+     * calendar date is selected, for yearly targets and learning vision.
+     * Their note_date is still whatever day they were created on - pinning
+     * only changes where they're displayed, so unpinning drops one straight
+     * back into its original day without any date bookkeeping.
+     */
+    public List<CalendarNote> getPinnedNotes() {
+        List<CalendarNote> list = new ArrayList<>();
+        String sql = "SELECT * FROM calendar_notes WHERE is_pinned=1 ORDER BY sort_order ASC, created_at ASC;";
+        try (Statement st = getConnection().createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) list.add(mapRowToNote(rs));
+        } catch (SQLException e) {
+            System.err.println("[DatabaseHelper] getPinnedNotes failed: " + e.getMessage());
+        }
+        return list;
+    }
+
+    /**
+     * Global note search across title + markdown body, used by the search bar
+     * above the calendar. Typing "#java" finds every note tagged that way and
+     * the dates they live on; tags are just inline text, so no tags table is
+     * needed - which is also why this is a LIKE and not an index lookup.
+     *
+     * <p>The user's text is passed as a bound parameter (never concatenated),
+     * and its own % / _ / \ characters are escaped so searching for a literal
+     * "100%" doesn't turn into a match-everything wildcard.
+     *
+     * @return matching notes, newest date first. Empty for a blank query.
+     */
+    public List<CalendarNote> searchNotes(String query) {
+        List<CalendarNote> list = new ArrayList<>();
+        if (query == null || query.isBlank()) return list;
+
+        String pattern = "%" + query.trim()
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_") + "%";
+        String sql = """
+                SELECT * FROM calendar_notes
+                WHERE title LIKE ? ESCAPE '\\' OR content_markdown LIKE ? ESCAPE '\\'
+                ORDER BY note_date DESC, sort_order ASC;
+                """;
+        try (PreparedStatement ps = getConnection().prepareStatement(sql)) {
+            ps.setString(1, pattern);
+            ps.setString(2, pattern);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) list.add(mapRowToNote(rs));
+            }
+        } catch (SQLException e) {
+            System.err.println("[DatabaseHelper] searchNotes failed: " + e.getMessage());
+        }
+        return list;
     }
 
     public boolean deleteNote(int noteId) {
@@ -847,7 +1248,10 @@ public class DatabaseHelper {
 
     public List<CalendarNote> getNotesForDate(LocalDate date) {
         List<CalendarNote> list = new ArrayList<>();
-        String sql = "SELECT * FROM calendar_notes WHERE note_date=? ORDER BY sort_order ASC, created_at ASC;";
+        // is_pinned=0: a pinned note is rendered once in the Universal section
+        // above, so excluding it here is what stops it showing twice on the
+        // day it happens to have been created.
+        String sql = "SELECT * FROM calendar_notes WHERE note_date=? AND is_pinned=0 ORDER BY sort_order ASC, created_at ASC;";
         try (PreparedStatement ps = getConnection().prepareStatement(sql)) {
             ps.setString(1, date.toString());
             try (ResultSet rs = ps.executeQuery()) {
@@ -906,6 +1310,67 @@ public class DatabaseHelper {
         }
     }
 
+    /**
+     * Typed read of a numeric setting. Settings are stored as free text, and a
+     * hand-edited or half-written value must not take down the dashboard on
+     * startup - an unparseable value falls back to the default rather than
+     * throwing out of initialize().
+     */
+    public double getSettingDouble(String key, double defaultValue) {
+        String raw = getSetting(key, null);
+        if (raw == null || raw.isBlank()) return defaultValue;
+        try {
+            return Double.parseDouble(raw.trim());
+        } catch (NumberFormatException e) {
+            System.err.println("[DatabaseHelper] setting '" + key + "' is not a number ('"
+                    + raw + "') - using default " + defaultValue);
+            return defaultValue;
+        }
+    }
+
+    /** @see #getSettingDouble(String, double) */
+    public int getSettingInt(String key, int defaultValue) {
+        return (int) Math.round(getSettingDouble(key, defaultValue));
+    }
+
+    /**
+     * Depth of every skill, derived from parent_id in SQL.
+     *
+     * <p>WHY THIS EXISTS RATHER THAN Skill#getDepth(): the dashboard's skill
+     * list comes from {@link #getAllSkills()}, whose Skill objects have a null
+     * {@code parent} field - only {@link #getSkillTree()} wires those up. So
+     * getDepth() returns 0 for every row on that list, and indenting the
+     * ComboBox by it would silently do nothing. Same trap as the point rollup.
+     *
+     * <p>Depth-capped like getAncestorIds() so a corrupt parent_id cycle
+     * degrades instead of hanging the UI thread.
+     *
+     * @return skill id -> 0 for a root Category, 1 for a Skill, 2+ for Subskills.
+     */
+    public Map<Integer, Integer> getSkillDepths() {
+        Map<Integer, Integer> depths = new HashMap<>();
+        String sql = """
+                WITH RECURSIVE tree(id, depth) AS (
+                    SELECT id, 0 FROM skills WHERE parent_id IS NULL OR parent_id = -1
+                    UNION ALL
+                    SELECT s.id, tree.depth + 1
+                    FROM skills s JOIN tree ON s.parent_id = tree.id
+                    WHERE tree.depth < 64
+                )
+                SELECT id, depth FROM tree;
+                """;
+        try (Statement st = getConnection().createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                depths.put(rs.getInt("id"), rs.getInt("depth"));
+            }
+        } catch (SQLException e) {
+            System.err.println("[DatabaseHelper] getSkillDepths failed: " + e.getMessage());
+        }
+        return depths;
+    }
+
+
     private CalendarNote mapRowToNote(ResultSet rs) throws SQLException {
         CalendarNote n = new CalendarNote();
         n.setId(rs.getInt("id"));
@@ -917,6 +1382,7 @@ public class DatabaseHelper {
         n.setColorHex(rs.getString("color_hex"));
         n.setStatus(rs.getString("status"));
         n.setCompleted(rs.getInt("is_completed") == 1);
+        n.setPinned(rs.getInt("is_pinned") == 1);
         return n;
     }
 }

@@ -127,7 +127,7 @@ public final class PdfExportUtil {
         cs.beginText();
         cs.setFont(FONT_REGULAR, 10);
         cs.newLineAtOffset(MARGIN, PAGE_HEIGHT - 48);
-        cs.showText("Progress Report \u2014 generated " + LocalDate.now().format(DATE_FMT));
+        cs.showText("Progress Report - generated " + LocalDate.now().format(DATE_FMT));
         cs.endText();
 
         return PAGE_HEIGHT - bandHeight - 24;

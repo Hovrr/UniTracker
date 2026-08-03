@@ -1,0 +1,27 @@
+Put the window/taskbar icon PNGs here:
+
+    icon-16.png
+    icon-32.png
+    icon-48.png
+    icon-256.png
+
+WHY PNG AND NOT THE icon.ico IN THE PROJECT ROOT:
+JavaFX's Image decoder reads PNG, JPEG, GIF and BMP only - it cannot read
+.ico at all. The root icon.ico is still correct and still used: launch4j
+embeds it in the built .exe (see the windows-exe profile in pom.xml). That
+covers the file's icon in Explorer. But the icon on the running window's
+title bar and taskbar button is set at runtime by
+MainApp#loadWindowIcons(), and that needs PNGs.
+
+WHY FOUR SIZES:
+Windows picks the closest match per context - 16px title bar, 32px taskbar,
+48/256 for Alt-Tab and desktop shortcuts. Supplying only one large PNG makes
+Windows downscale it, which is what makes an icon look muddy in the title bar.
+
+Any that are missing are simply skipped - the app runs fine without them and
+just falls back to the default JavaFX icon, with a note on stdout.
+
+To generate all four from the existing icon.ico, any image editor works, or:
+    magick icon.ico -resize 256x256 src/main/resources/com/unitracker/images/icon-256.png
+(repeat for 16, 32, 48 - .ico files often contain several sizes already, in
+which case use icon.ico[0], icon.ico[1], ... to pick a specific one.)

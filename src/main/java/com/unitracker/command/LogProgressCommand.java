@@ -4,33 +4,36 @@ import com.unitracker.db.DatabaseHelper;
 import com.unitracker.model.ProgressLog;
 import com.unitracker.model.Skill;
 
+import java.util.List;
+
 /**
- * Logs a study/practice session. Undo removes the log row and reverts the
- * skill's currentPoints to exactly what it was before - captured up front
- * so this works correctly even if the skill's target/points have been
- * edited again in between (undo restores the ORIGINAL value, not just
- * "subtract the points" - avoiding drift if other edits happened between
- * execute() and a much-later undo()).
+ * Logs a study/practice session. Undo removes the log row and subtracts the
+ * points back out again.
+ * <p>
+ * Points accumulate BOTTOM-UP: logging against a Subskill credits the same
+ * amount to its parent Main Skill and on up to the root Category, so a
+ * Category's % completion reflects everything logged beneath it. See
+ * {@link PointRollup} for why this is a relative delta rather than the
+ * previousPoints snapshot this class used to take.
  */
 public class LogProgressCommand implements Command {
 
     private final DatabaseHelper db;
     private final Skill skill;
+    private final List<Skill> allSkills;
     private final ProgressLog log;
-    private final double previousPoints;
 
-    public LogProgressCommand(DatabaseHelper db, Skill skill, ProgressLog log) {
+    public LogProgressCommand(DatabaseHelper db, Skill skill, List<Skill> allSkills, ProgressLog log) {
         this.db = db;
         this.skill = skill;
+        this.allSkills = allSkills;
         this.log = log;
-        this.previousPoints = skill.getCurrentPoints();
     }
 
     @Override
     public void execute() {
         db.insertProgressLog(log); // assigns log.id via the generated key
-        skill.setCurrentPoints(skill.getCurrentPoints() + log.getPointsEarned());
-        db.updateSkill(skill);
+        PointRollup.apply(db, allSkills, skill.getId(), log.getPointsEarned());
     }
 
     @Override
@@ -38,7 +41,6 @@ public class LogProgressCommand implements Command {
         if (log.getId() > 0) {
             db.deleteProgressLog(log.getId());
         }
-        skill.setCurrentPoints(previousPoints);
-        db.updateSkill(skill);
+        PointRollup.apply(db, allSkills, skill.getId(), -log.getPointsEarned());
     }
 }

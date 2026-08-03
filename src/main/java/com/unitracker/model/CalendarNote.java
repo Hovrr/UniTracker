@@ -30,6 +30,9 @@ public class CalendarNote {
     private final StringProperty colorHex = new SimpleStringProperty(this, "colorHex", "#414F6C");
     private final StringProperty status = new SimpleStringProperty(this, "status", STATUS_ACTIVE);
     private final BooleanProperty completed = new SimpleBooleanProperty(this, "completed", false);
+    /** Pinned = shown in the "Universal" section above the day list, on every
+     *  date. noteDate is still kept as-is so unpinning restores it to its day. */
+    private final BooleanProperty pinned = new SimpleBooleanProperty(this, "pinned", false);
 
     public CalendarNote() {
         // No-arg constructor required by DatabaseHelper row-mapping.
@@ -76,4 +79,8 @@ public class CalendarNote {
     public boolean isCompleted() { return completed.get(); }
     public void setCompleted(boolean value) { completed.set(value); }
     public BooleanProperty completedProperty() { return completed; }
+
+    public boolean isPinned() { return pinned.get(); }
+    public void setPinned(boolean value) { pinned.set(value); }
+    public BooleanProperty pinnedProperty() { return pinned; }
 }

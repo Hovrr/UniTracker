@@ -15,6 +15,8 @@
 <?import javafx.scene.control.Slider?>
 <?import javafx.scene.control.Spinner?>
 <?import javafx.scene.control.SplitPane?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.control.TitledPane?>
 <?import javafx.scene.control.ToggleButton?>
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.FlowPane?>
@@ -26,16 +28,22 @@
 <?import javafx.scene.shape.Circle?>
 
 <!--
-    Layout map (v4 - see DashboardController.java for the full field list):
-      TOP    -> title + Undo/Redo/Clear-Cache + Save/Import/Export/PDF
-      LEFT   -> Calendar (top) + Sticky Notes (below)
+    Layout map (v5 - see DashboardController.java for the full field list):
+      TOP    -> title + Undo/Redo/Refresh + Save/Import/Export/PDF
+      LEFT   -> tag search + heatmap calendar + streak labels
+                + Pomodoro/level panel
+                + Sticky Notes (pinned section, then the selected day's notes)
       CENTER -> Skill header (+ Edit/Delete/Reorder, swatches + ColorPicker)
                 + metrics + PERSISTENT progress bar (A.1) + real-time input
-                + 6-way graph toggle (Progress Bar removed - it's persistent
+                + 7-way graph toggle (Progress Bar removed - it's persistent
                 now, not a toggle) + a vertical SplitPane (A.2) whose TOP
                 pane is [filter panel, then zoom/spacing controls below it]
                 and whose BOTTOM pane is the visualization StackPane
       BOTTOM -> status bar
+
+    NOTE: Velocity reuses curveChart (same LineChart node, date-formatted X
+    axis) and Time Split reuses structuralCanvas, so both inherit the existing
+    zoom/pan/export plumbing instead of adding new nodes.
 
     REMOVED in v4: progressBarToggle + progressBarView + progressBarPercentLabel
     (item A.1 - the bar itself moved up near the metrics, it's no longer a
@@ -49,11 +57,24 @@
     <top>
         <HBox styleClass="top-bar" spacing="12" alignment="CENTER_LEFT">
             <padding><Insets top="14" right="24" bottom="14" left="24"/></padding>
-            <Label text="Uni Tracker" styleClass="app-title"/>
+            <!-- Mute is the absolute first element, Tips immediately after, then
+                 the title. The "circle-button" class carries the round shape;
+                 "icon-button" is left off deliberately because its rectangular
+                 background-radius would fight the circle. -->
+            <ToggleButton fx:id="muteToggle" text="&#128266;" styleClass="circle-button"
+                          onAction="#handleToggleMute">
+                <tooltip><Tooltip text="Mute or unmute the interface sounds"/></tooltip>
+            </ToggleButton>
+            <Button fx:id="tipsButton" text="Tips" styleClass="secondary-button"
+                    onAction="#handleShowTips">
+                <tooltip><Tooltip text="Hidden interactions and keyboard shortcuts"/></tooltip>
+            </Button>
             <Region HBox.hgrow="ALWAYS"/>
             <Button fx:id="undoButton" text="&#8630; Undo" styleClass="secondary-button" onAction="#handleUndo"/>
             <Button fx:id="redoButton" text="&#8631; Redo" styleClass="secondary-button" onAction="#handleRedo"/>
-            <Button text="Clear Cache" styleClass="secondary-button" onAction="#handleRefreshAndClearCache"/>
+            <Button text="&#8635; Refresh" styleClass="secondary-button" onAction="#handleRefreshAndClearCache">
+                <tooltip><Tooltip text="Re-read everything from SQLite and re-render the whole dashboard"/></tooltip>
+            </Button>
             <Region minWidth="8" maxWidth="8"/>
             <Button text="Save" styleClass="secondary-button" onAction="#handleSaveState"/>
             <Button text="Import .utrack" styleClass="secondary-button" onAction="#handleImportUtrack"/>
@@ -68,9 +89,28 @@
             <padding><Insets top="24" right="24" bottom="24" left="24"/></padding>
 
             <!-- ==== LEFT COLUMN: Calendar (top) + Sticky Notes (below) ==== -->
-            <VBox spacing="20" prefWidth="380" minWidth="340">
+            <!-- ITEM 1.6, PART 2: minWidth lowered 340 -> 300 and maxWidth pinned to
+                 prefWidth. The old 340 floor plus the chart column's own minimum was
+                 more than a 1080p window could satisfy once maximized, so the layout
+                 overflowed instead of reflowing. maxWidth stops this column from
+                 eating the extra room on a wide screen - the charts should get it. -->
+            <VBox spacing="20" prefWidth="380" minWidth="300" maxWidth="420">
 
+                <!-- PART 2: each section is a TitledPane so it can be collapsed when
+                     1080p runs out of vertical room. TitledPane (not a nested
+                     SplitPane) because collapsing gives the space back ENTIRELY -
+                     a SplitPane divider can only ever redistribute it, so three
+                     stacked panels still each demand a minimum. Expanded state is
+                     persisted per pane in app_settings; see
+                     DashboardController#setupCollapsibleSidebar. -->
+                <TitledPane fx:id="calendarPane" text="Calendar" expanded="true"
+                            styleClass="sidebar-pane" animated="false">
                 <VBox styleClass="glass-panel" spacing="10">
+                    <!-- Tag search sits ABOVE the calendar: typing #tag replaces the
+                         notes list with matching dates you can click through to. -->
+                    <TextField fx:id="noteSearchField" styleClass="search-field"
+                               promptText="&#128269;  Search notes or #tags"/>
+
                     <HBox alignment="CENTER" spacing="10">
                         <Button text="&#8249;" styleClass="icon-button" onAction="#handlePreviousMonth"/>
                         <Label fx:id="monthYearLabel" styleClass="panel-title" alignment="CENTER"
@@ -81,19 +121,110 @@
                         </Button>
                     </HBox>
                     <GridPane fx:id="calendarGrid" hgap="4" vgap="6" alignment="CENTER"/>
-                </VBox>
 
-                <VBox styleClass="glass-panel" spacing="10" VBox.vgrow="ALWAYS">
+                    <!-- Streaks read straight off the heatmap data above them. -->
+                    <HBox spacing="8" alignment="CENTER_LEFT" styleClass="streak-row">
+                        <Label fx:id="currentStreakLabel" text="Current Streak: 0 Days"
+                               styleClass="streak-label"/>
+                        <Region HBox.hgrow="ALWAYS"/>
+                        <Label fx:id="longestStreakLabel" text="Longest Streak: 0 Days"
+                               styleClass="streak-label-muted"/>
+                    </HBox>
+                </VBox>
+                </TitledPane>
+
+                <TitledPane fx:id="timerPane" text="Focus Timer" expanded="true"
+                            styleClass="sidebar-pane" animated="false">
+                <VBox styleClass="glass-panel" spacing="10">
+                    <!-- TOP HALF: horizontal split. Clock left, badge over the
+                         Start+Reset pair right.
+
+                         Width budget at the column's prefWidth=380 (minus the
+                         glass-panel's 2x16 padding = 348 usable):
+                           right VBox  ~122px  ("Lv.36 - Polymath" is the widest
+                                                badge BADGE_TITLES can produce)
+                           spacing       10px
+                           clock       ~191px  ("01:30:00" at 50px Space Grotesk)
+                                     = ~323px, ~25px spare.
+
+                         The Region spacer, not HBox.hgrow on the label, is what
+                         pushes the two groups apart - giving the clock hgrow
+                         would let it claim space it does not need and shove the
+                         badge off the right edge at narrow widths. -->
+                    <HBox alignment="CENTER_LEFT" spacing="10">
+                    <!-- minWidth="0" is the load-bearing fix for the resize
+                         overflow bug. "-Infinity" (Region.USE_PREF_SIZE) pinned
+                         this label at its full-text width (~212px at 50px),
+                         which the panel chain could not reflow around - the
+                         sidebar column is clamped minWidth=300/maxWidth=420 and
+                         the outer HBox has no hgrow - so the clock forced the
+                         HBox to overflow the column whenever the window shrank.
+                         Letting it shrink to nothing means it yields gracefully
+                         (it has no hgrow of its own) instead of breaking out. -->
+                    <Label fx:id="pomodoroTimeLabel" text="25:00" styleClass="pomodoro-time"
+                           minWidth="0" alignment="CENTER_LEFT"/>
+                        <Region HBox.hgrow="ALWAYS"/>
+                        <VBox alignment="CENTER_RIGHT" spacing="6">
+                            <Label fx:id="levelBadgeLabel" text="Lv.1" styleClass="level-badge"/>
+                            <HBox alignment="CENTER_RIGHT" spacing="6">
+                                <!-- No maxWidth/hgrow: the button sizes to its own
+                                     text. .compact-button pins a min-width so the
+                                     Start -> Pause -> Resume text swap does not
+                                     resize it mid-session and jog the reset icon
+                                     sideways. -->
+                                <Button fx:id="pomodoroStartButton" text="Start"
+                                        styleClass="accent-button, compact-button"
+                                        onAction="#handlePomodoroToggle"/>
+                                <Button fx:id="pomodoroResetButton" text="&#8635;" styleClass="icon-button"
+                                        onAction="#handlePomodoroReset">
+                                    <tooltip><Tooltip text="Reset the timer back to the selected duration"/></tooltip>
+                                </Button>
+                            </HBox>
+                        </VBox>
+                    </HBox>
+                    <!-- Item 2.2: duration presets + the gear that sets what each one
+                         is worth. Both persist to app_settings, so no schema change. -->
                     <HBox alignment="CENTER_LEFT" spacing="8">
-                        <Label text="Sticky Notes" styleClass="panel-title"/>
+                        <ComboBox fx:id="timerDurationCombo" styleClass="depth-level-combo"
+                                  HBox.hgrow="ALWAYS" maxWidth="Infinity">
+                            <tooltip><Tooltip text="How long one focus block lasts"/></tooltip>
+                        </ComboBox>
+                        <Button fx:id="timerSettingsButton" text="&#9881;" styleClass="icon-button"
+                                onAction="#handleTimerSettings">
+                            <tooltip><Tooltip text="Points per session and points needed per level"/></tooltip>
+                        </Button>
+                    </HBox>
+                    <ProgressBar fx:id="pomodoroProgressBar" progress="0" maxWidth="Infinity"
+                                 styleClass="pomodoro-bar"/>
+                    <Label fx:id="levelProgressLabel" text="0 / 100 pts to Lv.2"
+                           styleClass="metric-label"/>
+                </VBox>
+                </TitledPane>
+
+                <TitledPane fx:id="notesPane" text="Sticky Notes" expanded="true"
+                            styleClass="sidebar-pane" animated="false">
+                <VBox styleClass="glass-panel" spacing="10" VBox.vgrow="ALWAYS">
+                    <!-- "Sticky Notes" heading moved to the TitledPane title. -->
+                    <HBox alignment="CENTER_LEFT" spacing="8">
                         <Label fx:id="selectedDateLabel" styleClass="metric-label"/>
                         <Region HBox.hgrow="ALWAYS"/>
                         <Button text="+ Note" styleClass="accent-button" onAction="#handleAddNote"/>
                     </HBox>
+                    <!-- Pinned notes stay visible whatever date is selected.
+                         Controller sets managed=false when empty so it costs no space. -->
+                    <VBox fx:id="pinnedNotesContainer" spacing="8" styleClass="pinned-section"
+                          visible="false" managed="false"/>
+                    <!-- PART 2 compact mode: when the pane is too short for a
+                         usable list, the ScrollPane below is hidden and this
+                         hint takes its place. Controller toggles both. -->
+                    <Label fx:id="compactNotesHint" styleClass="empty-notes-label"
+                           text="Pane too short - expand it or collapse another to see the day's notes."
+                           wrapText="true" visible="false" managed="false"/>
                     <ScrollPane fitToWidth="true" styleClass="notes-scroll" VBox.vgrow="ALWAYS">
                         <VBox fx:id="notesContainer" spacing="10"/>
                     </ScrollPane>
                 </VBox>
+                </TitledPane>
             </VBox>
 
             <!-- ==== RIGHT COLUMN: Skill Tracker + Visualization ==== -->
@@ -149,6 +280,19 @@
                      selected skill. Hidden for I-Shaped/Skill-Tree - see
                      DashboardController#showDepthLevelComboBox. -->
                 <FlowPane hgap="8" vgap="8" styleClass="toggle-row" alignment="CENTER_LEFT">
+                    <!-- Item 1.1: Velocity and Time Split lead the row. They are the
+                         two aggregate/time views (LineChart + pie); the five that
+                         follow are all structural views of the hierarchy, so this
+                         also groups the row by what it actually shows. -->
+                    <ToggleButton fx:id="velocityToggle" text="Velocity" styleClass="graph-toggle"
+                                  onAction="#handleToggleVisualization">
+                        <tooltip><Tooltip text="Points gained per day - the combo picks the time range; Custom asks for two dates"/></tooltip>
+                    </ToggleButton>
+                    <ToggleButton fx:id="timePieToggle" text="Time Split" styleClass="graph-toggle"
+                                  onAction="#handleToggleVisualization">
+                        <tooltip><Tooltip text="Minutes actually spent, split by root category"/></tooltip>
+                    </ToggleButton>
+                    <Region minWidth="10" maxWidth="10"/>
                     <ToggleButton fx:id="curveToggle" text="Curve" styleClass="graph-toggle"
                                   onAction="#handleToggleVisualization"/>
                     <ToggleButton fx:id="iShapedToggle" text="I-Shaped" styleClass="graph-toggle"
@@ -170,7 +314,14 @@
                 <SplitPane fx:id="mainSplitPane" orientation="VERTICAL" dividerPositions="0.38"
                            VBox.vgrow="ALWAYS" styleClass="main-split-pane">
 
-                    <VBox spacing="10">
+                    <!-- ITEM 1.3: resizableWithParent="false" makes this pane keep its own
+                         preferred height when the window resizes, so the chart area below
+                         absorbs the change instead of both panes scaling by ratio. The
+                         controller then parks the divider exactly at this pane's real
+                         height (see anchorDividerToControls), which is what makes the
+                         chart's top edge track the controls as the dynamic filter and
+                         zoom rows appear and disappear per chart type. -->
+                    <VBox fx:id="chartControlsPane" spacing="10" SplitPane.resizableWithParent="false">
                         <!-- Collapsible, category-grouped skill filter for Comb-Shaped/Skill-Tree/Radar -->
                         <ScrollPane fx:id="filterScrollPane" fitToWidth="true" styleClass="filter-scroll"
                                     VBox.vgrow="ALWAYS" visible="false" managed="false">
@@ -186,19 +337,37 @@
                                 <Button text="+" styleClass="icon-button zoom-button" onAction="#handleZoomIn"/>
                                 <Button text="Reset" styleClass="icon-button" onAction="#handleZoomReset"/>
                             </HBox>
+                            <!-- ITEM 6: the old ranges were 0.6-6.0 and 0.6-5.0. Those
+                                 are ~10x and ~8x spans across a 90px track, so ~9px of
+                                 drag doubled the canvas - the jump the user described.
+                                 Narrowed to 0.8-2.5 (a bit over 3x) and widened the
+                                 track to 130px, which is ~5x finer control per pixel.
+                                 blockIncrement also governs arrow-key steps, so 0.05
+                                 gives keyboard users the same fine grain.
+                                 Anything past 2.5x was unusable in practice anyway -
+                                 the canvas outgrew the viewport and became pure pan. -->
                             <HBox spacing="6" alignment="CENTER_LEFT">
                                 <Label text="H-Spacing" styleClass="metric-label"/>
-                                <Slider fx:id="hSpacingSlider" min="0.6" max="6.0" value="1.0" prefWidth="90"/>
+                                <Slider fx:id="hSpacingSlider" min="0.8" max="2.5" value="1.0"
+                                        blockIncrement="0.05" prefWidth="130"/>
                             </HBox>
                             <HBox spacing="6" alignment="CENTER_LEFT">
                                 <Label text="V-Spacing" styleClass="metric-label"/>
-                                <Slider fx:id="vSpacingSlider" min="0.6" max="5.0" value="1.0" prefWidth="90"/>
+                                <Slider fx:id="vSpacingSlider" min="0.8" max="2.5" value="1.0"
+                                        blockIncrement="0.05" prefWidth="130"/>
                             </HBox>
                             <CheckBox fx:id="rotateLabelsCheckBox" text="Rotate Text" styleClass="rotate-checkbox"/>
                         </HBox>
                     </VBox>
 
-                    <StackPane fx:id="visualizationStack" styleClass="visualization-area">
+                    <!-- ITEM 5: minHeight is a floor, not a preference - it stops the
+                         chart being squeezed to nothing if the controls pane ever asks
+                         for an unreasonable height (a long filter list on a short
+                         window). resizableWithParent defaults to true here, which is
+                         what makes THIS pane absorb every window resize while the
+                         controls pane above keeps its preferred pixel height. -->
+                    <StackPane fx:id="visualizationStack" styleClass="visualization-area"
+                               minHeight="220" SplitPane.resizableWithParent="true">
 
                         <LineChart fx:id="curveChart" visible="false" managed="false"
                                    animated="false" legendVisible="false">

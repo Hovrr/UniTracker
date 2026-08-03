@@ -47,12 +47,6 @@
 /* ============================================================
    TYPOGRAPHY
    ============================================================ */
-.app-title {
-    -fx-font-family: "Space Grotesk";
-    -fx-font-size: 22px;
-    -fx-font-weight: bold;
-    -fx-text-fill: -text-primary;
-}
 .panel-title {
     -fx-font-family: "Space Grotesk";
     -fx-font-size: 15px;
@@ -100,6 +94,53 @@
     -fx-background-color: rgba(255, 255, 255, 0.03);
     -fx-border-color: transparent transparent -glass-border transparent;
     -fx-border-width: 0 0 1px 0;
+}
+
+/* ============================================================
+   COLLAPSIBLE SIDEBAR PANE  (PART 2)
+
+   TitledPane ships with an opaque grey title bar, a border and its own
+   padding, all of which sit ON TOP of the .glass-panel card inside it and
+   read as a double frame. So everything here is subtraction: the wrapper
+   goes fully transparent and only the title row keeps any styling.
+
+   > .title and > *.content are the skin's two sub-structures; they must be
+   targeted directly because TitledPane's own background properties do not
+   reach them.
+   ============================================================ */
+.sidebar-pane {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-padding: 0;
+    -fx-text-fill: -text-primary;
+}
+.sidebar-pane > .title {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-padding: 2px 4px 4px 4px;
+    -fx-font-family: "Space Grotesk";
+    -fx-font-size: 13px;
+    -fx-font-weight: 600;
+    -fx-text-fill: -text-secondary;
+    -fx-cursor: hand;
+}
+.sidebar-pane > .title:hover {
+    -fx-text-fill: -lime-green;
+}
+/* The disclosure triangle. Left at default size; only recoloured so it
+   reads as part of the theme rather than a stock control. */
+.sidebar-pane > .title > .arrow-button > .arrow {
+    -fx-background-color: -text-muted;
+}
+.sidebar-pane > .title:hover > .arrow-button > .arrow {
+    -fx-background-color: -lime-green;
+}
+/* Zero padding here is what lets the .glass-panel inside keep its own 16px
+   and stay flush with the panels above and below it. */
+.sidebar-pane > *.content {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-padding: 0;
 }
 
 /* ============================================================
@@ -155,6 +196,185 @@
 .icon-button:disabled {
     -fx-opacity: 0.35;
     -fx-cursor: default;
+}
+/* Toggled-on icon button (currently: the Pin button on a pinned note). */
+.icon-button-active {
+    -fx-text-fill: -lime-green;
+}
+
+/* ============================================================
+   CIRCULAR ICON BUTTON  (the header mute/speaker toggle)
+
+   A PERFECT circle needs three things, and all three are load-bearing:
+     1. equal min AND max width/height - pinning only pref- lets the label's
+        own size win and you get an oval as soon as the glyph is wide;
+     2. -fx-background-radius >= half that size (50% works, and stays correct
+        if the size is ever changed);
+     3. -fx-padding: 0 - default button padding is asymmetric (2 8 above), which
+        pushes the glyph off-centre inside the circle.
+   -fx-content-display + alignment CENTER keeps the emoji optically centred.
+   ============================================================ */
+.circle-button {
+    -fx-min-width: 32px;
+    -fx-min-height: 32px;
+    -fx-max-width: 32px;
+    -fx-max-height: 32px;
+    -fx-background-radius: 50%;
+    -fx-border-radius: 50%;
+    -fx-padding: 0;
+    -fx-alignment: center;
+    -fx-background-color: rgba(255, 255, 255, 0.07);
+    -fx-border-color: -glass-border;
+    -fx-border-width: 1px;
+    -fx-text-fill: -text-secondary;
+    -fx-font-size: 13px;
+    -fx-cursor: hand;
+}
+.circle-button:hover {
+    -fx-background-color: rgba(168, 235, 18, 0.16);
+    -fx-border-color: -lime-green;
+    -fx-text-fill: -lime-green;
+}
+/* Muted state. ToggleButton's :selected already tracks it, so no extra
+   style class has to be added or removed from Java. */
+.circle-button:selected {
+    -fx-background-color: rgba(255, 255, 255, 0.04);
+    -fx-border-color: rgba(255, 255, 255, 0.18);
+    -fx-text-fill: -text-muted;
+}
+
+/* ============================================================
+   TAG SEARCH  (feature 6b - sits above the calendar)
+   ============================================================ */
+.search-field {
+    -fx-background-color: rgba(255, 255, 255, 0.05);
+    -fx-background-radius: 10px;
+    -fx-border-color: rgba(255, 255, 255, 0.10);
+    -fx-border-width: 1px;
+    -fx-border-radius: 10px;
+    -fx-text-fill: -text-primary;
+    -fx-prompt-text-fill: -text-muted;
+    -fx-font-family: "Poppins";
+    -fx-font-size: 12px;
+    -fx-padding: 7 12;
+}
+.search-field:focused {
+    -fx-border-color: -glass-border;
+    -fx-background-color: rgba(255, 255, 255, 0.08);
+    -fx-effect: dropshadow(gaussian, rgba(168, 235, 18, 0.18), 10, 0.2, 0, 0);
+}
+/* "3 notes matched" line shown in place of the day list while searching. */
+.search-summary-label {
+    -fx-text-fill: -text-muted;
+    -fx-font-family: "Poppins";
+    -fx-font-size: 11px;
+}
+/* Clickable date result - jumps the calendar to that day. */
+.search-date-chip {
+    -fx-background-color: rgba(0, 135, 147, 0.22);
+    -fx-background-radius: 8px;
+    -fx-border-color: rgba(0, 135, 147, 0.45);
+    -fx-border-width: 1px;
+    -fx-border-radius: 8px;
+    -fx-text-fill: -text-primary;
+    -fx-font-family: "Poppins";
+    -fx-font-size: 11px;
+    -fx-padding: 5 10;
+    -fx-cursor: hand;
+}
+.search-date-chip:hover {
+    -fx-background-color: rgba(168, 235, 18, 0.22);
+    -fx-border-color: -lime-green;
+}
+
+/* ============================================================
+   STREAKS  (feature 3 - under the calendar)
+   ============================================================ */
+.streak-row {
+    -fx-padding: 2 2 0 2;
+}
+/* Grey until the streak is actually alive; :alive is set from
+   refreshStreakLabels() so a dead streak doesn't get to look celebratory. */
+.streak-label {
+    -fx-text-fill: -text-muted;
+    -fx-font-family: "Space Grotesk";
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+}
+.streak-label:alive {
+    -fx-text-fill: -lime-green;
+    -fx-effect: dropshadow(gaussian, rgba(168, 235, 18, 0.40), 8, 0.3, 0, 0);
+}
+.streak-label-muted {
+    -fx-text-fill: -text-secondary;
+    -fx-font-family: "Poppins";
+    -fx-font-size: 11px;
+}
+
+/* ============================================================
+   POMODORO + LEVEL BADGE  (features 2 and 11)
+   ============================================================ */
+/* The panel's most prominent number. 46 -> 50 now that the clock sits on the
+   left of a horizontal split instead of owning a full-width row.
+
+   50px is only the CEILING and only the pre-layout default. The size is driven
+   at runtime by DashboardController#clockFontFor, which interpolates 35..50px
+   against the sidebar column's own 300..420 clamp - this declaration is what
+   the label renders at for the single frame before the first width listener
+   fires. Change the band there, not here.
+
+   Why it has to scale at all: at the column's 300px floor the panel has
+   ~150px left for the clock after the glass-panel's 2x16 padding, the 10px
+   HBox spacing and the ~108px badge/button stack. "01:30:00" needs ~212px at
+   50px, so a fixed size either overflowed the sidebar (the old
+   minWidth="-Infinity") or ellipsised the clock to "01:30...". Scaling is the
+   only option that keeps all 8 glyphs on screen.
+
+   Italic is kept from the previous round: it reads as a timekeeping display
+   and distinguishes the clock from the badge now that they share a row. */
+.pomodoro-time {
+    -fx-text-fill: -text-primary;
+    -fx-font-family: "Space Grotesk";
+    -fx-font-size: 50px;
+    -fx-font-weight: bold;
+    -fx-font-style: italic;
+}
+/* Compact Start button. Applied alongside .accent-button, and defined AFTER it
+   so it wins on source order (both are single-class selectors, so specificity
+   ties and the later rule takes it).
+
+   -fx-min-width is the load-bearing property: handlePomodoroToggle swaps the
+   text Start -> Pause -> Resume, and without a floor the button would resize
+   mid-session and jog the reset icon sideways every time. 78px clears "Resume"
+   (~41px at 12px Poppins 600) plus the 2x14 padding with room to spare. */
+.compact-button {
+    -fx-min-width: 78px;
+    -fx-padding: 6 14;
+}
+.pomodoro-bar {
+    -fx-pref-height: 6px;
+    -fx-background-radius: 3px;
+}
+.pomodoro-bar > .track {
+    -fx-background-color: rgba(255, 255, 255, 0.07);
+    -fx-background-radius: 3px;
+}
+.pomodoro-bar > .bar {
+    -fx-background-color: linear-gradient(to right, -inch-worm, -lime-green);
+    -fx-background-radius: 3px;
+    -fx-padding: 0;
+}
+.level-badge {
+    -fx-background-color: rgba(168, 235, 18, 0.16);
+    -fx-background-radius: 20px;
+    -fx-border-color: -glass-border;
+    -fx-border-width: 1px;
+    -fx-border-radius: 20px;
+    -fx-text-fill: -lime-green;
+    -fx-font-family: "Space Grotesk";
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-padding: 3 10;
 }
 
 /* ============================================================
@@ -241,19 +461,46 @@
 /* B.6 (corrected): a descendant selector, not a direct-child one - SplitPane's
    actual skin puts an intermediate node between .split-pane and
    .split-pane-divider, so ".split-pane > .split-pane-divider" (the previous
-   attempt) never matched at all. -fx-background-insets is set explicitly
-   because a divider's default insets can otherwise swallow a thin background
-   into invisibility. Padding is both the visible thickness AND the
-   grabbable/hitbox size in JavaFX (a divider has no other content) - 3px
-   is a deliberate middle ground between "thin" and "easy to grab". */
+   attempt) never matched at all. */
+/* ITEM 1.2 - BIG HITBOX, THIN LINE.
+
+   SplitPane renders the divider as a Region with a background fill and no
+   children, so every pixel of padding IS grabbable territory. The trick:
+     -fx-padding          → total divider area = 20px (10 + 10)
+     -fx-background-insets → carve 9px off each side, leaving a 2px painted line
+   The cursor sees a 20px target; the eye sees a hairline.
+   A visible 8px bar that's "thick enough to grab" looks like a slab across
+   the dark glass UI. A 2px line with a 10px padded margin around it is
+   invisible until you look for it, which is exactly what the user wants.
+
+   ITEM 4: widened 14px → 20px. Note that padding alone was NOT the reason the
+   divider felt unusable - DashboardController#setupResponsiveDivider was
+   re-anchoring it mid-drag, so the target kept moving. Fixed there. This is
+   the other half: a genuinely large target now that it holds still.
+
+   The selector is a DESCENDANT one on purpose. SplitPaneSkin nests the divider
+   below an intermediate node, so ".split-pane > .split-pane-divider" matches
+   nothing at all. */
 .split-pane .split-pane-divider {
     -fx-background-color: -lime-green;
-    -fx-background-insets: 0;
-    -fx-padding: 6px 0;
+    -fx-background-insets: 9px 0;
+    -fx-padding: 10px 0;
 }
+/* Horizontal SplitPanes, if any get added later, need the axes swapped. */
+.split-pane:horizontal .split-pane-divider {
+    -fx-background-insets: 0 9px;
+    -fx-padding: 0 10px;
+}
+/* Brighten the line on hover so the (deliberately large) invisible target
+   still gives visible feedback that you have found it. */
 .split-pane .split-pane-divider:hover,
 .split-pane .split-pane-divider:pressed {
     -fx-background-color: derive(-lime-green, 20%);
+    -fx-background-insets: 8px 0;
+}
+.split-pane:horizontal .split-pane-divider:hover,
+.split-pane:horizontal .split-pane-divider:pressed {
+    -fx-background-insets: 0 8px;
 }
 
 /* ============================================================
@@ -545,9 +792,13 @@
     -fx-pref-width: 42px;
     -fx-pref-height: 40px;
     -fx-cursor: hand;
+    -fx-border-color: transparent;
+    -fx-border-width: 1px;
+    -fx-border-radius: 8px;
 }
 .calendar-day:hover {
     -fx-background-color: rgba(168, 235, 18, 0.12);
+    -fx-border-color: rgba(168, 235, 18, 0.35);
 }
 .calendar-day-number {
     -fx-text-fill: #C7D0DD;
@@ -559,16 +810,39 @@
     -fx-border-width: 1.5px;
     -fx-border-radius: 8px;
 }
-/* B.5: marks a day that already has at least one logged session - a muted
-   blue-gray wash (not lime) so it reads as "has history" without being
-   mistaken for -today's lime border or -selected's lime background tint.
-   Declared BEFORE .calendar-day-selected so, if a day is both logged AND
-   selected, the more attention-worthy selected tint wins the cascade. */
-.calendar-day-logged {
-    -fx-background-color: rgba(65, 79, 108, 0.35);
+
+/* B.5 / feature 3+7: GitHub-style heatmap tiers. Replaces the old flat
+   .calendar-day-logged blue-gray wash, which was too low-contrast to read as
+   intensity at all - every logged day looked identical no matter the effort.
+   Tiers come from heatmapTierClass() in DashboardController:
+     no class = 0 points (stays the base near-transparent cell)
+     heat-1   = 1-5    pale green
+     heat-2   = 6-15   mid green
+     heat-3   = 16+    bright lime + glow, so a heavy day pops off the grid
+   Declared BEFORE .calendar-day-selected so the selected tint still wins. */
+.calendar-day-heat-1 {
+    -fx-background-color: rgba(0, 135, 147, 0.38);
+    -fx-border-color: rgba(0, 135, 147, 0.45);
+}
+.calendar-day-heat-2 {
+    -fx-background-color: rgba(88, 190, 90, 0.55);
+    -fx-border-color: rgba(120, 210, 100, 0.60);
+}
+.calendar-day-heat-3 {
+    -fx-background-color: rgba(168, 235, 18, 0.85);
+    -fx-border-color: -lime-green;
+    -fx-effect: dropshadow(gaussian, rgba(168, 235, 18, 0.55), 12, 0.35, 0, 0);
+}
+/* Dark text on the two bright tiers - light-on-lime is unreadable. */
+.calendar-day-heat-2 .calendar-day-number,
+.calendar-day-heat-3 .calendar-day-number {
+    -fx-text-fill: #0B1A2B;
+    -fx-font-weight: bold;
 }
 .calendar-day-selected {
     -fx-background-color: rgba(168, 235, 18, 0.22);
+    -fx-border-color: -lime-green;
+    -fx-border-width: 1.5px;
 }
 
 /* ============================================================
@@ -586,6 +860,22 @@
     -fx-font-family: "Space Grotesk";
     -fx-font-size: 13px;
     -fx-font-weight: 600;
+}
+/* Pinned section divider - thin line between universal and per-day notes. */
+.pinned-section {
+    -fx-border-color: transparent transparent rgba(255, 255, 255, 0.08) transparent;
+    -fx-border-width: 0 0 1px 0;
+    -fx-padding: 0 0 10 0;
+    -fx-spacing: 8;
+}
+/* A pinned note gets a lime left-border instead of whatever colour the note
+   card would have used, plus a subtle inner glow so you can spot it in the
+   pinned section at a glance without reading the title. */
+.note-card-pinned {
+    -fx-border-color: transparent transparent transparent -lime-green;
+    -fx-border-width: 0 0 0 3px;
+    -fx-border-radius: 10px;
+    -fx-background-color: rgba(168, 235, 18, 0.07);
 }
 .notes-scroll {
     -fx-background-color: transparent;
