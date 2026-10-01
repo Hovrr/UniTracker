@@ -1,86 +1,152 @@
-# Uni Tracker | Multi-Skill Progress Dashboard
+# UniTracker
 
-**Uni Tracker** is an offline desktop app for tracking multiple skills at once (programming languages, instruments, anything). Featuring a **Dark Mode Glassmorphism UI**, it is designed to help ambitious learners, self-taught developers, and designers map, track, and visualize their progress in a structured way. 
+A JavaFX desktop dashboard with Dark Mode Glassmorphism UI for tracking multi-skill learning progress.
 
-It utilizes a hierarchical Category → Skill → Subskill tree, calendar-linked sticky notes, real-time progress tracking, and several ways to visualize how you're doing. Built with Java 25 + JavaFX 25 + SQLite, it requires no network access at runtime.
+UniTracker is an offline desktop application for tracking many skills at once: programming languages, instruments, crafts, or anything else you are learning. It organises your work as a hierarchical `Category` > `Main Skill` > `Subskill` tree, links every log entry to a calendar date, and renders your progress as charts. Built with Java 25, JavaFX 25 and SQLite, it requires no network access at runtime.
+
+This document describes **v2.0.0**.
 
 ---
 
-##  Key Features
+## Key Features
 
-- **Multi-Level Skill Hierarchy (Subskills)**  
-  Manage skills from top-level categories down to granular details (`Category` > `Main Skill` > `Subskill 1` > `Subskill 2`, etc.) to track your learning progress with precision.
-  
-- **Interactive Visualization Diagrams**  
-  Supports various chart types:
-  - **Comb-Shaped** & **Radar Chart** (with hierarchy depth filters and automatic text word-wrap).
-  - **Skill-Tree Diagram** (a genuinely recursive branching map of categories and subskills reading to an unlimited depth).
-  - **Curve** & **I-Shaped**.
-  - Options to *Toggle Rotate Text* and custom *H-Spacing / V-Spacing* settings (double-click to input values).
+### Data Integrity
 
-- **Canvas Navigation (Photoshop-like Hand Tool)**  
-  - Freely pan the chart area using click & drag.
-  - Quick *Zoom In / Zoom Out* using buttons or **CTRL + Scroll**.
-  - *Auto-Center* feature to instantly bring the chart back to the middle of the screen.
+- **Derived Point Rollups**
+  Skill points are never accumulated in mutable application state. Every total is derived from the SQLite log table on demand using recursive CTEs, so a subskill's points reach its parent skill and its category by construction. There is no cached total that can drift from the rows it was computed from.
 
-- **Calendar & Time-Travel Logging**  
-  - **Log Session**: Record daily learning time (Minutes & Points).
-  - **Right-Click Date Selection**: Choose any date on the calendar as the "Active Date" to log missed sessions or future schedules.
-  - **Batch Log Session**: Right-click the *Log Session* button to log multiple sessions at once within a specific *Date Range*.
-  - **History Indicator**: Dates with logged histories are visually marked on the calendar.
-  - **Sync Date**: A custom button to reset the active date back to the system's current date.
+- **Safe Mutations with Undo and Redo**
+  Editing a skill, deleting one, or logging progress are command objects, so any of them can be reversed. Because the cache is derived rather than stored, undo cannot leave a stale figure behind.
 
-- **Rich-Text Sticky Notes**  
-  - Linked directly to the selected calendar date.
-  - Equipped with a Markdown & Rich Text toolbar: **Bold (Ctrl+B)**, **Italic (Ctrl+I)**, **Headlines**, **Bullet**, and **Numbering**.
-  - **Interactive Checkbox `[ ]`**: Clickable checkboxes inside notes that don't break text formatting.
-  - Reorder notes easily with **Drag & Drop**.
+- **Completion Estimates**
+  Each skill projects an estimated completion date from recent activity velocity, so you can see the consequence of the current pace rather than only the progress so far.
 
-- **Customization & Gamification**  
-  - Custom color palettes for each skill using a *Color Picker* adapted for the Dark Mode theme.
-  - **Celebration Effect**: Interactive confetti particle animations when a skill's completion progress reaches **100%**.
+### Focus Timer
 
-- **PDF Report Export**  
-  Export your entire skill progress summary and visualization charts into a cleanly formatted PDF document with automatic word-wrap.
+- **Deadline-Based Timing**
+  The Focus Timer counts down against an absolute `Instant` deadline instead of decrementing a counter once per frame, so the session length does not drift with frame rate or a busy event loop.
+
+- **Crash Resilience**
+  Timer state is persisted on every transition across `IDLE`, `RUNNING` and `PAUSED`. If the application is terminated unexpectedly, an active or expired session is recovered at the next launch rather than lost.
+
+- **Floating Widget**
+  An always-on-top, transparent Floating Timer window can be detached from the Dashboard. Both windows are driven by a single central ticker, so the clock cannot diverge between them when you switch focus.
+
+- **Non-Modal Completion**
+  Finishing a session commits it immediately and offers undo. There is no modal dialog waiting to be dismissed, which previously interrupted whatever you were doing.
+
+### Progress Presets and Mastery Curves
+
+- **Progress Presets** define what a unit of effort is worth: set a duration and the points it awards once, instead of per log entry.
+- **Mastery Curves** convert a skill target into a ladder of milestones at fixed ratios, such as basic proficiency and working competence.
+- Both are integrated directly into the Add Skill workflow and remain fully editable afterwards.
+
+### Appearance and Scaling
+
+- **Live Settings Dialog**
+  A write-through settings dialog covers appearance, focus timer durations, custom point rewards and mastery curves. Changes apply immediately with no restart.
+- **Resolution-Aware Scaling**
+  The interface scales across four tiers: `Compact`, `Default (1080p)`, `Large (1440p)` and `Extra large (4K)`, plus an `Automatic` setting that picks a tier from the display diagonal. Scaling is applied to every open window at once.
+- **Motion Toggle**
+  A global animation switch can disable transitions and effects. When motion is off, end-state properties are applied directly so the interface stays fully usable without animation.
+
+### Visualizations
+
+- **Comb-Shaped and Radar** diagrams with hierarchy depth filters and automatic text wrapping.
+- **Skill-Tree** diagram: a recursive branching map of categories and subskills to unlimited depth.
+- **Velocity, Time Split, Curve and I-Shaped** charts for single-skill progress.
+- Per-chart **H-Spacing** and **V-Spacing** controls, a **Rotate Text** option, zoom, and auto-center.
+- A comfortable vertical drag target on the chart divider, so the chart panel can be resized without hunting for a hairline.
+
+### Logging and Notes
+
+- **Calendar Logging**: log minutes and points against any date, including missed sessions and planned work. Dates with history are marked.
+- **Batch Log Session**: right-click the Log Session button to record many sessions across a date range in one dialog.
+- **Advanced Log**: a dedicated modal for detailed history, with a dark-themed calendar popup, non-editable click-to-open date fields and vertically stacked batch range pickers.
+- **Rich-Text Sticky Notes**: linked to the selected date, with Markdown formatting, interactive checkboxes that survive formatting, and drag-and-drop reordering.
+
+### Output
+
+- **PDF Report Export** of the progress summary and charts, with automatic word wrap.
+- **Custom colours** per skill through a dark-theme colour picker, and a completion animation when a skill reaches 100 percent.
 
 ---
 
 ## Tech Stack
 
-| Concern                | Library                             | Version  |
-|-------------------------|--------------------------------------|----------|
-| UI framework            | JavaFX (controls, fxml, web, swing) | 25.0.1 |
-| Local storage            | SQLite via `org.xerial:sqlite-jdbc` | 3.53.2.0 |
-| Markdown rendering       | Flexmark-Java (`flexmark-all`) | 0.64.8 |
-| PDF export               | Apache PDFBox | 3.0.7 |
-| Build tool               | Maven + `javafx-maven-plugin` | 0.0.8 |
+| Concern | Library | Version |
+|---|---|---|
+| UI framework | JavaFX (controls, fxml, web, swing, media) | 25.0.1 |
+| Local storage | SQLite via `org.xerial:sqlite-jdbc` | 3.53.2.0 |
+| Markdown rendering | Flexmark-Java (`flexmark-all`) | 0.64.8 |
+| PDF export | Apache PDFBox | 3.0.7 |
+| Windows packaging | Launch4j Maven Plugin | 2.7.0 |
+| Build tool | Maven with `javafx-maven-plugin` | 0.0.8 |
+| Test framework | JUnit 5 (Jupiter) | 5.11.4 |
+
+Data is stored in `~/.unitracker/unitracker.db`, created automatically on first launch.
 
 ---
 
-## How to Use (Portable Executable)
+## Requirements
 
-For Windows users who want to run the application directly without compiling the source code:
-
-1. Go to the **[Releases](../../releases)** section in this repository.
-2. Download the latest `.zip` release package (e.g., `UniTracker-v1.0.0-Windows.zip`).
-3. Extract the `.zip` file to a local folder on your computer.
-4. Run **`UniTracker.exe`**.
-
-> **Note:** If your computer does not have Java 25 installed, ensure the bundled `jre` folder remains in the exact same directory as `UniTracker.exe`.
+- Windows 10 or later for the bundled executable.
+- A Java 25 runtime. The Windows bundle does not embed a JVM, so Java must already be installed.
 
 ---
 
-## Compilation Guide & Quick Setup
+## Installation
 
-If you want to compile and build the project from the source code:
+1. Go to the [Releases](https://github.com/Hovrr/UniTracker/releases) page.
+2. Download `UniTracker-2.0.0-windows-x64.zip`.
+3. Extract the archive to a folder on your machine. Keep `UniTracker.exe` and `uni-tracker-windows.jar` in the same directory: the executable resolves the jar by name at launch.
+4. Run `UniTracker.exe`.
 
-1. Install **JDK 25** (JavaFX 25 will not run on anything older than JDK 23).
-2. Install **NetBeans IDE** (any recent version — this is a plain Maven project, which NetBeans 12+ opens natively: no separate NetBeans-project conversion needed)[cite: 3].
-3. `File → Open Project…` → select this `UniTracker` folder[cite: 3].
-4. Right-click the project → **Clean and Build** (downloads dependencies — the one step that needs internet; the app itself is fully offline afterward)[cite: 3].
-5. Click the green **Run** button[cite: 3]. `nbactions.xml` already binds it to `javafx:run` with the `--add-modules javafx.web,javafx.swing` flags the project needs, so no manual "Run Maven Goals…" step is required[cite: 3].
+The same release also publishes `UniTracker.exe` and `uni-tracker-windows.jar` as separate assets if you prefer to place them yourself.
 
-First launch creates `~/.unitracker/unitracker.db` automatically and seeds three example skills (each under its own Category) so the UI isn't empty[cite: 3].
+---
+
+## Building from Source
+
+Requirements: JDK 25 and Maven. JavaFX 25 does not run on anything older than JDK 23.
+
+```bash
+# Standard build: produces target/uni-tracker-2.0.0.jar
+mvn clean package
+
+# Windows executable bundle: produces target/UniTracker.exe
+# and target/uni-tracker-windows.jar
+mvn clean package -Pwindows-exe
+
+# Development run
+mvn javafx:run
+```
+
+The `windows-exe` profile is separate on purpose so that `mvn javafx:run` keeps working normally during development. It forces the `win` classifier JavaFX binaries regardless of the host operating system.
+
+NetBeans users can open this folder directly as a Maven project. `nbactions.xml` binds Run to `javafx:run` with the module flags the project needs, so no manual configuration is required.
+
+---
+
+## Verification and Tests
+
+```bash
+mvn test                # JUnit 5: 67 tests covering the data model, timer and presets
+python devcheck-xml.py  # every XML and FXML file parses
+python build-check.py   # all main and test sources compile
+python run-tests.py     # SQL, derived-point and timer-state harnesses
+python devcheck-fxml.py # headless JavaFX layout, scaling and interaction checks
+```
+
+| Suite | What it proves |
+|---|---|
+| `mvn test` | Derived-point rollups, timer state transitions and preset serialisation behave as specified. |
+| `SqlLogicCheck` | Schema and query behaviour against a real throwaway SQLite database. |
+| `DerivedPointsCheck` | Recursive rollup arithmetic, including reparenting and undo interleaving. |
+| `TimerStateCheck` | Deadline arithmetic, expiry, pause and resume, and window handoff. |
+| `devcheck-fxml.py` | Every view loads and wires up; layout invariants hold at each scale tier; the chart divider is reachable; DatePicker contrast and action-row labels are verified against measured layout. |
+
+`build-check.py` must be run before `devcheck-fxml.py`, because the layout harness executes compiled classes. The Python harnesses run with assertions enabled and against a temporary `user.home`, so they cannot open your real database.
 
 ---
 
@@ -88,31 +154,36 @@ First launch creates `~/.unitracker/unitracker.db` automatically and seeds three
 
 ```text
 UniTracker/
-├── pom.xml[cite: 3]
-├── nbactions.xml                       NetBeans Run/Debug → javafx:run[cite: 3]
-├── README.md[cite: 3]
-└── src/main/[cite: 3]
-    ├── java/com/unitracker/[cite: 3]
-    │   ├── MainApp.java                    entry point[cite: 3]
-    │   ├── command/                        Undo/Redo (Command Pattern)[cite: 3]
-    │   │   ├── Command.java[cite: 3]
-    │   │   ├── CommandManager.java[cite: 3]
-    │   │   ├── SkillSnapshot.java[cite: 3]
-    │   │   ├── LogProgressCommand.java[cite: 3]
-    │   │   ├── EditSkillCommand.java[cite: 3]
-    │   │   └── DeleteSkillCommand.java[cite: 3]
-    │   ├── controller/DashboardController.java[cite: 3]
-    │   ├── db/DatabaseHelper.java          SQLite schema + hierarchical CRUD[cite: 3]
-    │   ├── model/[cite: 3]
-    │   │   ├── Skill.java                  tree node (Category/Skill/Subskill N)[cite: 3]
-    │   │   ├── CalendarNote.java[cite: 3]
-    │   │   └── ProgressLog.java[cite: 3]
-    │   └── util/[cite: 3]
-    │       ├── MarkdownUtil.java           Flexmark wrapper[cite: 3]
-    │       ├── PdfExportUtil.java          PDFBox report generator[cite: 3]
-    │       ├── UtrackFileUtil.java         .utrack import/export[cite: 3]
-    │       └── VisualizationRenderer.java  all Canvas chart drawing[cite: 3]
-    └── resources/com/unitracker/[cite: 3]
-        ├── view/Dashboard.fxml[cite: 3]
-        ├── css/styles.css[cite: 3]
-        └── fonts/  (see PLACE_FONTS_HERE.txt)[cite: 3]
+├── pom.xml
+├── nbactions.xml                        NetBeans Run/Debug bindings
+├── build-check.py                       compile gate
+├── run-tests.py                         non-GUI harness entry point
+├── devcheck-xml.py                      XML and FXML parse gate
+├── RELEASE_NOTES_v2.0.0.md
+└── src/
+    ├── main/java/com/unitracker/
+    │   ├── MainApp.java                 entry point
+    │   ├── command/                     Undo/Redo command objects and snapshots
+    │   ├── controller/
+    │   │   ├── DashboardController.java main view controller
+    │   │   ├── FloatingTimerController.java
+    │   │   ├── FloatingTimerWindow.java
+    │   │   ├── SettingsDialogController.java
+    │   │   └── CurveEditor.java
+    │   ├── db/DatabaseHelper.java       schema, hierarchical CRUD, recursive rollups
+    │   ├── devcheck/                    headless verification harnesses
+    │   ├── model/                       Skill, ProgressLog, CalendarNote, ProgressPreset
+    │   └── util/                        UiScale, FocusTimerState, AppSettings, Anim,
+    │                                    MarkdownUtil, PdfExportUtil, VisualizationRenderer
+    └── resources/com/unitracker/
+        ├── view/                        Dashboard.fxml, FloatingTimer.fxml,
+        │                                SettingsDialog.fxml
+        ├── css/styles.css
+        └── fonts/                       Poppins and Space Grotesk (SIL Open Font License)
+```
+
+---
+
+## License
+
+Released under the MIT License. Bundled fonts are licensed under the SIL Open Font License; see `src/main/resources/com/unitracker/fonts/OFL.txt`.
