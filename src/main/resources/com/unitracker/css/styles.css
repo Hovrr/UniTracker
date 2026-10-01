@@ -1,7 +1,7 @@
 /* ============================================================
-   UNI TRACKER — Dark Mode Glassmorphism
+   UNI TRACKER - Dark Mode Glassmorphism  (v2.0)
    ============================================================
-   IMPORTANT — JavaFX CSS is NOT web CSS:
+   IMPORTANT - JavaFX CSS is NOT web CSS:
      - No backdrop-filter/blur-behind-element exists in JavaFX, so the
        "glass" look is approximated with translucent rgba() backgrounds,
        a subtle 1px accent border, and a soft dropshadow for depth.
@@ -10,6 +10,42 @@
        present in resources/com/unitracker/fonts (see MainApp.loadFont),
        JavaFX silently falls back to the platform default font - the UI
        still works, just without the custom typeface.
+     - There is NO var(), NO calc(), and no arithmetic on lengths. That
+       omission is what makes the scaling technique below necessary.
+
+   ------------------------------------------------------------
+   HOW RESOLUTION SCALING WORKS HERE  (the em technique)
+   ------------------------------------------------------------
+   JavaFX CSS has no CSS variables, so a stylesheet full of
+   `-fx-font-size: 12px` cannot be rescaled at runtime by any
+   stylesheet-only means. The one native mechanism that does work is the
+   `em` unit on `-fx-font-size`, which JavaFX resolves against the
+   INHERITED font size (see JDK-8205473).
+
+   So the rule adopted throughout this file is:
+
+       .root  is the ONLY selector with an absolute px size.
+       EVERY other font size is expressed in em.
+
+   Because `em` compounds down the tree, that creates one trap: if a
+   PARENT rule sets a font size and a CHILD rule also sets one in em,
+   the child's value is relative to the parent's, not to the root - so
+   the sizes multiply. devcheck/SqlLogicCheck#checkEmScaling asserts
+   that no selector in this file is both a font-size rule and an
+   ancestor of another, so the trap cannot be reintroduced silently.
+
+   The second trap, from the same JDK report: `em` on a NON-font property
+   (`-fx-padding`, `-fx-min-width`, `-fx-spacing`) resolves against
+   `Font.getDefault()` - a constant 12-13px - and NOT against the root
+   font. So padding and spacing in `em` would give text that scales
+   while panels stay fixed, which looks broken. Those are therefore left
+   as px here and scaled separately by the generated stylesheet that
+   UiScale writes at runtime.
+
+   INTERACTION WITH THE FOCUS TIMER CLOCK: the clock's size is set
+   imperatively (DashboardController#clockFontFor) rather than in CSS,
+   because it has to follow the sidebar's WIDTH as well as the tier. It
+   reads the same UiScale tier this stylesheet does, so the two agree.
    ============================================================ */
 
 /* ---------- Palette (JavaFX "looked-up colors", referenced below as -fx-...: -name;) ---------- */
@@ -29,6 +65,23 @@
 
     -fx-font-family: "Poppins";
     -fx-background-color: -deep-blue;
+
+    /* ================================================================
+       THE ONE ABSOLUTE FONT SIZE IN THE ENTIRE STYLESHEET.  (v2.0)
+
+       Everything below states its size in `em`, which JavaFX resolves
+       against the INHERITED font size. So this single line rescales the
+       whole type hierarchy proportionally - see the header comment.
+
+       UiScale.buildScaleStylesheet() appends a generated stylesheet that
+       overrides exactly this one property, which is why changing the
+       interface size in Settings is instant and total rather than a
+       handful of hard-coded values.
+
+       13px is the v1 baseline this layout was calibrated against at 1920x1080;
+       the tiers in UiScale.Scale bracket it.
+       ================================================================ */
+    -fx-font-size: 13px;
 }
 
 /* ---------- Safe base defaults (explicit, not relied-on inheritance) ---------- */
@@ -49,24 +102,24 @@
    ============================================================ */
 .panel-title {
     -fx-font-family: "Space Grotesk";
-    -fx-font-size: 15px;
+    -fx-font-size: 1.15em;
     -fx-font-weight: 600;
     -fx-text-fill: -text-primary;
 }
 .metric-value {
     -fx-font-family: "Space Grotesk";
-    -fx-font-size: 26px;
+    -fx-font-size: 2em;
     -fx-font-weight: bold;
     -fx-text-fill: -lime-green;
 }
 .metric-label {
     -fx-font-family: "Poppins";
-    -fx-font-size: 11px;
+    -fx-font-size: 0.85em;
     -fx-text-fill: -text-muted;
 }
 .big-percentage {
     -fx-font-family: "Space Grotesk";
-    -fx-font-size: 60px;
+    -fx-font-size: 4.62em;
     -fx-font-weight: bold;
     -fx-text-fill: -lime-green;
 }
@@ -78,7 +131,7 @@
 }
 
 /* ============================================================
-   GLASS PANEL — the core reusable "glassmorphism card" style
+   GLASS PANEL - the core reusable "glassmorphism card" style
    ============================================================ */
 .glass-panel {
     -fx-background-color: -glass-bg;
@@ -119,7 +172,7 @@
     -fx-border-color: transparent;
     -fx-padding: 2px 4px 4px 4px;
     -fx-font-family: "Space Grotesk";
-    -fx-font-size: 13px;
+    -fx-font-size: 1em;
     -fx-font-weight: 600;
     -fx-text-fill: -text-secondary;
     -fx-cursor: hand;
@@ -151,7 +204,7 @@
     -fx-text-fill: #0B1A2B;
     -fx-font-family: "Poppins";
     -fx-font-weight: 600;
-    -fx-font-size: 12px;
+    -fx-font-size: 0.92em;
     -fx-background-radius: 10px;
     -fx-padding: 8 18;
     -fx-border-width: 0;
@@ -169,7 +222,7 @@
     -fx-background-color: rgba(255, 255, 255, 0.07);
     -fx-text-fill: -text-primary;
     -fx-font-family: "Poppins";
-    -fx-font-size: 12px;
+    -fx-font-size: 0.92em;
     -fx-background-radius: 10px;
     -fx-border-color: rgba(255, 255, 255, 0.14);
     -fx-border-radius: 10px;
@@ -185,7 +238,7 @@
     -fx-background-color: transparent;
     -fx-text-fill: -text-secondary;
     -fx-font-family: "Poppins";
-    -fx-font-size: 14px;
+    -fx-font-size: 1.08em;
     -fx-font-weight: bold;
     -fx-cursor: hand;
     -fx-padding: 2 8;
@@ -227,7 +280,7 @@
     -fx-border-color: -glass-border;
     -fx-border-width: 1px;
     -fx-text-fill: -text-secondary;
-    -fx-font-size: 13px;
+    -fx-font-size: 1em;
     -fx-cursor: hand;
 }
 .circle-button:hover {
@@ -255,7 +308,7 @@
     -fx-text-fill: -text-primary;
     -fx-prompt-text-fill: -text-muted;
     -fx-font-family: "Poppins";
-    -fx-font-size: 12px;
+    -fx-font-size: 0.92em;
     -fx-padding: 7 12;
 }
 .search-field:focused {
@@ -267,7 +320,7 @@
 .search-summary-label {
     -fx-text-fill: -text-muted;
     -fx-font-family: "Poppins";
-    -fx-font-size: 11px;
+    -fx-font-size: 0.85em;
 }
 /* Clickable date result - jumps the calendar to that day. */
 .search-date-chip {
@@ -278,7 +331,7 @@
     -fx-border-radius: 8px;
     -fx-text-fill: -text-primary;
     -fx-font-family: "Poppins";
-    -fx-font-size: 11px;
+    -fx-font-size: 0.85em;
     -fx-padding: 5 10;
     -fx-cursor: hand;
 }
@@ -298,7 +351,7 @@
 .streak-label {
     -fx-text-fill: -text-muted;
     -fx-font-family: "Space Grotesk";
-    -fx-font-size: 12px;
+    -fx-font-size: 0.92em;
     -fx-font-weight: bold;
 }
 .streak-label:alive {
@@ -308,7 +361,7 @@
 .streak-label-muted {
     -fx-text-fill: -text-secondary;
     -fx-font-family: "Poppins";
-    -fx-font-size: 11px;
+    -fx-font-size: 0.85em;
 }
 
 /* ============================================================
@@ -335,7 +388,7 @@
 .pomodoro-time {
     -fx-text-fill: -text-primary;
     -fx-font-family: "Space Grotesk";
-    -fx-font-size: 50px;
+    -fx-font-size: 3.85em;
     -fx-font-weight: bold;
     -fx-font-style: italic;
 }
@@ -372,7 +425,7 @@
     -fx-border-radius: 20px;
     -fx-text-fill: -lime-green;
     -fx-font-family: "Space Grotesk";
-    -fx-font-size: 11px;
+    -fx-font-size: 0.85em;
     -fx-font-weight: bold;
     -fx-padding: 3 10;
 }
@@ -386,7 +439,7 @@
 .check-box {
     -fx-text-fill: -text-secondary;
     -fx-font-family: "Poppins";
-    -fx-font-size: 11px;
+    -fx-font-size: 0.85em;
 }
 .check-box .box {
     -fx-background-color: rgba(255, 255, 255, 0.08);
@@ -408,7 +461,7 @@
 .radio-button {
     -fx-text-fill: -text-secondary;
     -fx-font-family: "Poppins";
-    -fx-font-size: 11px;
+    -fx-font-size: 0.85em;
 }
 .radio-button .radio {
     -fx-background-color: rgba(255, 255, 255, 0.08);
@@ -427,7 +480,7 @@
 .breadth-label {
     -fx-text-fill: -text-secondary;
     -fx-font-family: "Poppins";
-    -fx-font-size: 11px;
+    -fx-font-size: 0.85em;
     -fx-font-style: italic;
     -fx-cursor: hand;
     -fx-padding: 2 8;
@@ -440,7 +493,7 @@
 }
 .breadth-label-edit {
     -fx-font-family: "Poppins";
-    -fx-font-size: 11px;
+    -fx-font-size: 0.85em;
     -fx-background-color: #16263A;
     -fx-text-fill: -text-primary;
     -fx-border-color: -lime-green;
@@ -462,41 +515,59 @@
    actual skin puts an intermediate node between .split-pane and
    .split-pane-divider, so ".split-pane > .split-pane-divider" (the previous
    attempt) never matched at all. */
-/* ITEM 1.2 - BIG HITBOX, THIN LINE.
 
-   SplitPane renders the divider as a Region with a background fill and no
-   children, so every pixel of padding IS grabbable territory. The trick:
-     -fx-padding          → total divider area = 20px (10 + 10)
-     -fx-background-insets → carve 9px off each side, leaving a 2px painted line
-   The cursor sees a 20px target; the eye sees a hairline.
-   A visible 8px bar that's "thick enough to grab" looks like a slab across
-   the dark glass UI. A 2px line with a 10px padded margin around it is
-   invisible until you look for it, which is exactly what the user wants.
+/* ============================================================
+   THE CHART RESIZE HANDLE
+   ============================================================
+   A ~15px grab zone with a ~1px line through it.
 
-   ITEM 4: widened 14px → 20px. Note that padding alone was NOT the reason the
-   divider felt unusable - DashboardController#setupResponsiveDivider was
-   re-anchoring it mid-drag, so the target kept moving. Fixed there. This is
-   the other half: a genuinely large target now that it holds still.
+   THE MECHANISM IS COUNTER-INTUITIVE, and getting it wrong is what caused the
+   long-standing defect. SplitPane has no divider-thickness property in JavaFX
+   25, so the only lever is the divider node's own CSS. Decompiling
+   SplitPaneSkin.layoutDividersAndContent shows how it sizes a divider:
 
-   The selector is a DESCENDANT one on purpose. SplitPaneSkin nests the divider
-   below an intermediate node, so ".split-pane > .split-pane-divider" matches
-   nothing at all. */
-.split-pane .split-pane-divider {
+       thickness = contentDividers.get(0).prefWidth(-1);
+       divider.resize(fullWidth, thickness);      // for a VERTICAL SplitPane
+
+   So the splitter's thickness comes from the divider's prefWIDTH - the
+   HORIZONTAL axis - even though it is then used as the divider's HEIGHT. The
+   previous rule here used vertical padding ("-fx-padding: 10px 0"), which
+   contributes nothing to prefWidth, so the thickness evaluated to 0 and the
+   divider was laid out literally 0px tall: FxmlCheck measured
+   size=975.000x0.000. Nothing in that rule could ever produce a catchable
+   target, and -fx-min-height, -fx-pref-height and -fx-max-height do not help
+   either - all three were tried and all three still measured 0.000px.
+
+   Hence HORIZONTAL padding below. It sets the hit height; -fx-background-insets
+   then paints only the middle ~1px of it. That is the decoupling this needs:
+   a generous target that still looks like a hairline.
+
+   The thickness scales with the interface tier through UiScale's generated
+   sheet, so a Compact tier does not quietly shrink the grab zone to a sliver.
+
+   Vertical clearance: the toolbar row and the chart are SEPARATE SplitPane
+   children, and the divider occupies its own band between them, so enlarging
+   it cannot overlap either. FxmlCheck asserts that the handle's scene bounds
+   do not intersect any of the toolbar's controls. */
+.main-split-pane .split-pane-divider {
+    -fx-background-color: transparent;
+    -fx-cursor: v-resize;
+    /* Horizontal padding = the divider's prefWidth = its laid-out thickness.
+       This one line is what makes the control usable at all. */
+    -fx-padding: 0 7.5px 7.5px;
+    /* Vertical insets paint the visible line, and deliberately do NOT move on
+       hover: a hover that resized the line would move the grab target under
+       the pointer, which is the instability this change exists to remove. */
+    -fx-background-insets: 7px 0;
+    -fx-opacity: 0.9;
+}
+.main-split-pane .split-pane-divider:hover,
+.main-split-pane .split-pane-divider:pressed {
     -fx-background-color: -lime-green;
-    -fx-background-insets: 9px 0;
-    -fx-padding: 10px 0;
-}
-/* Horizontal SplitPanes, if any get added later, need the axes swapped. */
-.split-pane:horizontal .split-pane-divider {
-    -fx-background-insets: 0 9px;
-    -fx-padding: 0 10px;
-}
-/* Brighten the line on hover so the (deliberately large) invisible target
-   still gives visible feedback that you have found it. */
-.split-pane .split-pane-divider:hover,
-.split-pane .split-pane-divider:pressed {
-    -fx-background-color: derive(-lime-green, 20%);
-    -fx-background-insets: 8px 0;
+    /* A 3px accent line instead of 1px. Insets only - the hit area, which is
+       padding, is byte-for-byte identical to the resting state. */
+    -fx-background-insets: 6px 0;
+    -fx-opacity: 1.0;
 }
 .split-pane:horizontal .split-pane-divider:hover,
 .split-pane:horizontal .split-pane-divider:pressed {
@@ -611,7 +682,7 @@
     -fx-min-width: 28px;
     -fx-pref-width: 28px;
     -fx-alignment: center;
-    -fx-font-size: 11px;
+    -fx-font-size: 0.85em;
     -fx-font-weight: 600;
 }
 .md-toolbar-button:hover {
@@ -670,7 +741,7 @@
 .filter-category-pane > .title > .text {
     -fx-fill: -text-secondary;
     -fx-font-family: "Poppins";
-    -fx-font-size: 11px;
+    -fx-font-size: 0.85em;
     -fx-font-weight: 600;
 }
 .filter-category-pane > .title > .arrow-button > .arrow {
@@ -708,7 +779,7 @@
     -fx-background-color: transparent;
     -fx-text-fill: -text-primary;
     -fx-font-family: "Poppins";
-    -fx-font-size: 12px;
+    -fx-font-size: 0.92em;
     -fx-padding: 8 10;
     -fx-cursor: move;
 }
@@ -720,7 +791,7 @@
 }
 
 /* ============================================================
-   STATUS TOGGLES — Active / Stalled (color-coding, per PRD)
+   STATUS TOGGLES - Active / Stalled (color-coding, per PRD)
    ============================================================ */
 .status-toggle-active {
     -fx-background-color: rgba(168, 235, 18, 0.12);
@@ -729,7 +800,7 @@
     -fx-border-color: rgba(168, 235, 18, 0.3);
     -fx-border-radius: 16px;
     -fx-border-width: 1px;
-    -fx-font-size: 11px;
+    -fx-font-size: 0.85em;
     -fx-padding: 4 12;
     -fx-cursor: hand;
 }
@@ -745,7 +816,7 @@
     -fx-border-color: rgba(65, 79, 108, 0.6);
     -fx-border-radius: 16px;
     -fx-border-width: 1px;
-    -fx-font-size: 11px;
+    -fx-font-size: 0.85em;
     -fx-padding: 4 12;
     -fx-cursor: hand;
 }
@@ -780,7 +851,7 @@
 .calendar-weekday {
     -fx-text-fill: -text-muted;
     -fx-font-family: "Space Grotesk";
-    -fx-font-size: 11px;
+    -fx-font-size: 0.85em;
     -fx-font-weight: bold;
     -fx-alignment: center;
     -fx-pref-width: 42px;
@@ -803,7 +874,7 @@
 .calendar-day-number {
     -fx-text-fill: #C7D0DD;
     -fx-font-family: "Poppins";
-    -fx-font-size: 12px;
+    -fx-font-size: 0.92em;
 }
 .calendar-day-today {
     -fx-border-color: -lime-green;
@@ -858,7 +929,7 @@
 .sticky-note-title {
     -fx-text-fill: -text-primary;
     -fx-font-family: "Space Grotesk";
-    -fx-font-size: 13px;
+    -fx-font-size: 1em;
     -fx-font-weight: 600;
 }
 /* Pinned section divider - thin line between universal and per-day notes. */
@@ -905,7 +976,7 @@
     -fx-border-width: 1px;
     -fx-padding: 6 14;
     -fx-font-family: "Poppins";
-    -fx-font-size: 11px;
+    -fx-font-size: 0.85em;
     -fx-cursor: hand;
 }
 .graph-toggle:hover {
@@ -986,18 +1057,201 @@
     -fx-text-fill: -text-primary;
     -fx-padding: 6 10;
 }
-/* ITEM 2 REVISI: fix sebelumnya pakai child combinator ">" - DatePicker
-   modern (DatePickerSkin) mewarisi base skin yang sama dengan ComboBox
-   (ComboBoxPopupControl), yang biasanya membungkus text-field-nya di dalam
-   container tambahan, jadi kemungkinan besar bukan direct child dan rule
-   ">" itu tidak pernah match sama sekali. Descendant selector (spasi)
-   match di kedalaman berapa pun. Kali ini teks dibuat GELAP (bukan
-   terang) - tidak lagi memaksa background gelap yang sepertinya kalah
-   dari default Modena; menyelaraskan teks dengan background terang yang
-   memang sudah menang, bukan melawannya lagi. */
+/* ============================================================
+   DATE PICKER  (dark theme)
+   ============================================================
+   This replaces an earlier rule that set the DatePicker's text to DARK
+   (-deep-blue) because "the light Modena background already won, stop
+   fighting it". That was a surrender, not a fix: it left every DatePicker a
+   white box with dark text inside a dark dialog, which is what made the
+   Advanced Log modal look like two different applications.
+
+   Descendant selectors throughout, never ">". DatePickerSkin wraps its
+   text field inside an extra container, so a child combinator matches
+   nothing at all - which is very likely how the original rule ended up
+   needing the workaround in the first place. */
+
+/* ============================================================
+   DATE PICKER  (dark theme)
+
+   THE STRUCTURE THIS STYLES, verified against JavaFX 25 by
+   inspecting the live skin rather than assumed from Modena:
+
+     DatePickerContent      classes=[root, date-picker-popup]
+       BorderPane           classes=[month-year-pane]
+         HBox               classes=[spinner]
+           Label            classes=[label, spinner-label]  "October"
+         HBox               classes=[spinner]
+           Label            classes=[label, spinner-label]  "2026"
+       GridPane             classes=[calendar-grid]
+         DateCell           classes=[cell, date-cell, day-name-cell]
+         DateCell           classes=[cell, day-cell, previous-month]
+         DateCell           classes=[cell, day-cell, today, selected]
+         DateCell           classes=[cell, day-cell]
+
+   Two consequences, both of which were live bugs:
+
+   1. There is no .calendar and no .month-cell / .year-cell. An earlier
+      version of this file styled all three and every one of those rules
+      matched NOTHING, so the grid kept Modena's light background while
+      the text rules below made its text light - white on white.
+
+   2. The popup is its OWN Scene and inherits nothing from the dialog
+      that opened it. The dialog being correctly themed says nothing
+      about whether the popup is.
+
+   THE ARROW. In JavaFX 25 the calendar glyph inside .arrow-button is a
+   plain Region with no skin. It is drawn from the CSS looked-up colour
+   -fx-shape (Region has a private `shape` property fed by it) and
+   PAINTED USING -fx-background-color. So `-fx-fill` does nothing - that
+   is a Shape property and this is not a Shape - and setting
+   -fx-background-color: transparent, as an earlier version here did,
+   paints the glyph in the colour of the panel behind it: invisible.
+   That was the "empty dark box with a border" symptom. The fix is to
+   give the glyph a light background of its own. */
+
+.date-picker {
+    -fx-background-color: transparent;
+    -fx-background-radius: 8px;
+    -fx-font-family: "Poppins";
+}
+/* The editor. Matches the Spinner/TextField/ComboBox rule so a DatePicker
+   and a Spinner side by side are visibly the same control. */
 .date-picker .text-field {
-    -fx-text-fill: -deep-blue;
-    -fx-prompt-text-fill: rgba(11, 26, 43, 0.5);
+    -fx-background-color: rgba(255, 255, 255, 0.08);
+    -fx-text-fill: -text-primary;
+    -fx-prompt-text-fill: rgba(231, 236, 243, 0.4);
+    -fx-background-radius: 8px;
+    -fx-border-color: rgba(255, 255, 255, 0.12);
+    -fx-border-radius: 8px;
+    -fx-border-width: 1px;
+}
+.date-picker:focused .text-field {
+    -fx-border-color: -lime-green;
+}
+
+/* The calendar button. The button gets a visible boundary so it reads as
+   a control even before the glyph is noticed. */
+.date-picker .arrow-button {
+    -fx-background-color: rgba(255, 255, 255, 0.06);
+    -fx-background-radius: 6px;
+    -fx-border-color: rgba(255, 255, 255, 0.14);
+    -fx-border-radius: 6px;
+    -fx-border-width: 1px;
+}
+/* THE GLYPH. Light, and explicitly sized, so the -fx-shape calendar is
+   not squeezed to nothing. The 12px box matches the drawn path. */
+.date-picker > .arrow-button > .arrow {
+    /* TWO layers, because Modena declares two and the glyph is painted with
+       the first fill and its inset. Overriding with a single colour left the
+       second layer's inset painting over the first.
+       Colours only: -fx-shape, -fx-background-insets and -fx-padding are
+       deliberately NOT overridden. An earlier version here also set a 12px
+       min/pref size, which fought Modena's 5px padding and squeezed the glyph
+       into roughly a 2x3 pixel sliver - a rule that looked correct and rendered
+       as nothing at all. */
+    -fx-background-color: #e2e8f0;
+    /* Modena's 5px padding against a 10px box leaves ~0x1px of content area,
+       so -fx-scale-shape has nothing to scale the glyph into and nothing is
+       drawn. Zero the padding and give the shape a real box. */
+    -fx-padding: 0;
+    -fx-scale-shape: true;
+    -fx-min-width: 13px;
+    -fx-min-height: 13px;
+    -fx-pref-width: 13px;
+    -fx-pref-height: 13px;
+}
+.date-picker > .arrow-button:hover > .arrow,
+.date-picker:showing > .arrow-button > .arrow {
+    -fx-background-color: #a8eb12;
+}
+.date-picker .arrow-button:hover,
+.date-picker:showing .arrow-button {
+    -fx-background-color: rgba(168, 235, 18, 0.16);
+    -fx-border-color: -lime-green;
+}
+
+/* ------------------------------------------------------------
+   THE POPUP
+   ------------------------------------------------------------
+   Separate window, so it needs its own rules, and these target the
+   class names that actually exist. */
+.date-picker-popup {
+    -fx-background-color: #0f172a;
+    -fx-background-radius: 10px;
+    -fx-border-color: #334155;
+    -fx-border-radius: 10px;
+    -fx-border-width: 1px;
+    -fx-padding: 0;
+}
+.date-picker-popup > .month-year-pane {
+    -fx-background-color: #1e293b;
+    -fx-background-radius: 9px 9px 0 0;
+    -fx-border-color: #334155;
+    -fx-border-width: 0 0 1 0;
+    -fx-padding: 8 10;
+}
+/* The month and year HBoxes. Their only child is the label; the arrows
+   are CSS-drawn regions on the HBox itself, so the HBox is left
+   transparent rather than painted over them. */
+.date-picker-popup > .month-year-pane > .spinner {
+    -fx-background-color: transparent;
+}
+.date-picker-popup .spinner-label {
+    -fx-text-fill: #f8fafc;
+    -fx-font-family: "Poppins";
+    -fx-font-weight: 700;
+    -fx-font-size: 0.95em;
+}
+.date-picker-popup > .calendar-grid {
+    -fx-background-color: #131c31;
+    -fx-background-radius: 0 0 9px 9px;
+    -fx-padding: 4;
+}
+/* Day-of-week header row. */
+.date-picker-popup .day-name-cell {
+    -fx-background-color: #0f172a;
+    -fx-text-fill: #94a3b8;
+    /* Modena's default cell border is a LIGHT derived colour, which on this
+       background draws a bright outline around every cell. It also meant the
+       cells' brightest pixel was the border rather than the text, so any check
+       on text contrast was really measuring the border. */
+    -fx-border-color: transparent;
+    -fx-font-family: "Poppins";
+    -fx-font-weight: 700;
+    -fx-font-size: 0.82em;
+    -fx-background-radius: 3px;
+}
+/* The days. */
+.date-picker-popup .day-cell {
+    -fx-background-color: #1e293b;
+    -fx-text-fill: #f1f5f9;
+    -fx-border-color: transparent;
+    -fx-font-family: "Poppins";
+    -fx-background-radius: 4px;
+    -fx-padding: 5 7;
+}
+.date-picker-popup .day-cell:hover {
+    -fx-background-color: #334155;
+    -fx-border-color: #a8eb12;
+    -fx-text-fill: #a8eb12;
+}
+/* Today: outlined, so it cannot be read as a selection. */
+.date-picker-popup .day-cell.today {
+    -fx-border-color: #a8eb12;
+    -fx-border-width: 1px;
+}
+.date-picker-popup .day-cell:selected {
+    -fx-background-color: #a8eb12;
+    -fx-text-fill: #0f172a;
+    -fx-font-weight: 700;
+    -fx-border-color: #a8eb12;
+}
+/* Days from the neighbouring months: present but recessed. */
+.date-picker-popup .day-cell.previous-month,
+.date-picker-popup .day-cell.next-month {
+    -fx-background-color: #0f172a;
+    -fx-text-fill: #475569;
 }
 .combo-box-popup .list-cell:hover,
 .combo-box-popup .list-cell:filled:selected {
@@ -1016,11 +1270,11 @@
 .status-bar-label {
     -fx-text-fill: -text-muted;
     -fx-font-family: "Poppins";
-    -fx-font-size: 11px;
+    -fx-font-size: 0.85em;
 }
 
 /* ============================================================
-   SCROLLBARS — restyled so they don't show the light default theme
+   SCROLLBARS - restyled so they don't show the light default theme
    ============================================================ */
 .scroll-pane, .scroll-pane > .viewport {
     -fx-background-color: transparent;
@@ -1044,7 +1298,7 @@
 }
 
 /* ============================================================
-   DIALOGS (Add Skill / Add Note / Alerts) — reuse the glass look
+   DIALOGS (Add Skill / Add Note / Alerts) - reuse the glass look
    ============================================================ */
 .dialog-pane {
     -fx-background-color: -deep-blue;
@@ -1057,4 +1311,556 @@
 }
 .dialog-pane .header-panel {
     -fx-background-color: rgba(255, 255, 255, 0.04);
+}
+
+/* ============================================================
+   TOAST STRIP  (v2.0)
+   ------------------------------------------------------------
+   The non-modal confirmation that replaced the Focus Session
+   dialog. Two rules matter here:
+
+   1. It is a MANAGED child, and the controller sets managed=false
+      when hidden, so a dismissed toast costs the layout nothing.
+      Without that, an empty strip would still claim its padding
+      and leave a permanent gap above the status bar.
+
+   2. The stripe is slightly inset and rounded rather than a full-width
+      band, so it reads as a floating notification over the app
+      rather than as a permanent fourth row in the layout.
+   ============================================================ */
+.toast-strip {
+    -fx-background-color: rgba(20, 34, 51, 0.96);
+    -fx-background-radius: 12px;
+    -fx-border-color: -glass-border;
+    -fx-border-width: 1px;
+    -fx-border-radius: 12px;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.45), 18, 0.2, 0, 6);
+    -fx-padding: 10px 16px;
+}
+.toast-label {
+    -fx-font-family: "Poppins";
+    -fx-font-size: 0.92em;
+    -fx-text-fill: -text-primary;
+}
+.toast-undo-button {
+    -fx-font-family: "Poppins";
+    -fx-font-size: 0.92em;
+    -fx-font-weight: 600;
+    -fx-text-fill: -lime-green;
+    -fx-background-color: rgba(168, 235, 18, 0.14);
+    -fx-background-radius: 16px;
+    -fx-padding: 5px 16px;
+    -fx-cursor: hand;
+    -fx-border-color: rgba(168, 235, 18, 0.42);
+    -fx-border-width: 1px;
+    -fx-border-radius: 16px;
+}
+/* Hover is the only affordance here, so it needs to be unmistakable -
+   the whole point of the toast is that the user notices it and can
+   still take the Undo back. */
+.toast-undo-button:hover {
+    -fx-background-color: rgba(168, 235, 18, 0.26);
+    -fx-scale-x: 1.03;
+    -fx-scale-y: 1.03;
+}
+.toast-undo-button:pressed {
+    -fx-background-color: rgba(168, 235, 18, 0.34);
+    -fx-scale-x: 0.99;
+    -fx-scale-y: 0.99;
+}
+
+/* ============================================================
+   FLOATING TIMER WIDGET  (v2.0)
+   ------------------------------------------------------------
+   THREE THINGS make or break a transparent JavaFX stage, and all
+   three are handled here or in FloatingTimerWindow:
+
+   1. .float-timer-root must be fully transparent. The scene fill
+      is nulled in code, but the ROOT NODE also paints a background,
+      and the default root style does. A root with any colour at all
+      is the classic reason a "transparent" stage renders as a
+      black rectangle.
+
+   2. The padding on the root is dead space for the drop shadow.
+      Clipping a shadow to the stage bounds is what produces the
+      hard dark edge that makes these widgets look cheap.
+
+   3. The card itself carries the .glass-panel treatment, reused from
+      the dashboard so the widget reads as part of the same app
+      rather than as a foreign system window.
+   ============================================================ */
+.float-timer-root {
+    -fx-background-color: transparent;
+    -fx-padding: 16px;
+}
+
+/* The card is slightly more opaque than the dashboard's panels. A
+   floating widget sits over arbitrary desktop content, and a 6%
+   translucent panel that looks refined against the app's own dark
+   background turns into an unreadable smear over a bright
+   wallpaper. */
+.float-timer-card {
+    -fx-background-color: rgba(11, 26, 43, 0.94);
+    -fx-background-radius: 18px;
+    -fx-border-color: -glass-border;
+    -fx-border-width: 1px;
+    -fx-border-radius: 18px;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.55), 28, 0.25, 0, 10);
+    -fx-padding: 14px 16px;
+}
+
+/* Paused: desaturate the border and drop the shadow slightly. The
+   clock still reads at full strength - the user needs to see the
+   remaining time precisely when the session is NOT progressing, so
+   dimming the number itself would be actively unhelpful. */
+.float-timer-paused {
+    -fx-border-color: rgba(168, 235, 18, 0.10);
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.35), 18, 0.15, 0, 6);
+}
+
+.float-timer-skill {
+    -fx-font-family: "Poppins";
+    -fx-font-size: 0.85em;
+    -fx-font-weight: 600;
+    -fx-text-fill: -text-secondary;
+}
+
+/* The clock is the reason the widget exists, so it is the largest
+   type in the app - bigger even than .big-percentage on the
+   dashboard. It is bounded by the card width via maxWidth on the
+   Label, with ellipsis as the last-resort safety net. */
+.float-timer-clock {
+    -fx-font-family: "Space Grotesk";
+    -fx-font-size: 3.08em;
+    -fx-font-weight: bold;
+    -fx-font-style: italic;
+    -fx-text-fill: -text-primary;
+}
+
+.float-timer-state {
+    -fx-font-family: "Poppins";
+    -fx-font-size: 0.77em;
+    -fx-text-fill: -text-muted;
+}
+
+/* The dock glyph is a small chevron rather than a text X, because a
+   transparent stage has no OS close button and this is the only
+   obvious way out for a user who does not read the tooltip. */
+.float-timer-dock {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-padding: 2px 6px;
+}
+.float-timer-dock:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.08);
+    -fx-border-color: -glass-border;
+    -fx-border-radius: 8px;
+}
+
+/* The pop-out / dock toggle inside the sidebar timer panel. Full
+   width so it reads as a panel-level action rather than as a fourth
+   timer control competing with Start and Reset. */
+.timer-window-button {
+    -fx-max-width: Infinity;
+    -fx-font-size: 0.85em;
+}
+
+/* ============================================================
+   SETTINGS DIALOG  (v2.0)
+   ------------------------------------------------------------
+   The DialogPane's own background is the -deep-blue rather than a
+   glass panel, because the tabs are the container and a
+   translucent card behind a translucent card is where the
+   glassmorphism look starts to turn muddy.
+   ============================================================ */
+.settings-pane {
+    -fx-background-color: -deep-blue;
+    -fx-background-radius: 16px;
+}
+.settings-pane > .button-bar > .container {
+    -fx-background-color: transparent;
+}
+
+/* The tab strip itself needs an explicit background: TabPane defaults to an
+   opaque light-grey strip, which is the single most jarring thing you can put
+   in this dark glass UI. */
+.settings-tabs {
+    -fx-background-color: transparent;
+    -fx-background-radius: 12px;
+    -fx-padding: 4px 0 0 0;
+}
+
+/* Tab headers. The selected tab gets the lime underline, which is the only
+   accent in the dialog - a settings screen is not the place for colour
+   competing with the content the user is trying to read. */
+.settings-tabs .tab-header-area .tab-header-background {
+    -fx-background-color: transparent;
+}
+.settings-tabs .tab {
+    -fx-background-color: transparent;
+    -fx-padding: 9px 18px;
+}
+.settings-tabs .tab:selected {
+    -fx-background-color: transparent;
+}
+.settings-tabs .tab .tab-label {
+    -fx-font-family: "Poppins";
+    -fx-font-size: 0.92em;
+    -fx-text-fill: -text-muted;
+}
+.settings-tabs .tab:selected .tab-label {
+    -fx-text-fill: -lime-green;
+    -fx-font-weight: 600;
+}
+.settings-tabs .tab .tab-container {
+    -fx-background-color: transparent;
+}
+.settings-tabs > .content-area {
+    -fx-background-color: transparent;
+}
+
+/* The per-tab content card. Transparent background on the tab pane above
+   means this card is what the user actually sees framed. */
+.settings-tab {
+    -fx-padding: 6px 4px;
+}
+.settings-label {
+    -fx-font-family: "Poppins";
+    -fx-font-size: 0.92em;
+    -fx-font-weight: 600;
+    -fx-text-fill: -text-primary;
+}
+.settings-hint {
+    -fx-font-family: "Poppins";
+    -fx-font-size: 0.85em;
+    -fx-font-style: italic;
+    -fx-text-fill: -text-muted;
+}
+.settings-toggle {
+    -fx-font-family: "Poppins";
+    -fx-font-size: 0.92em;
+    -fx-text-fill: -text-primary;
+}
+.settings-combo {
+    -fx-font-size: 0.92em;
+}
+.settings-spinner {
+    -fx-pref-width: 160px;
+    -fx-font-size: 0.92em;
+}
+
+/* Reward rows: a subtle alternating band makes a 9-row list scannable
+   without drawing a border around every cell, which would fight the
+   glass card behind it. */
+.settings-rewards {
+    -fx-background-color: rgba(255, 255, 255, 0.03);
+    -fx-background-radius: 10px;
+    -fx-padding: 10px 12px;
+}
+.settings-list {
+    -fx-background-color: rgba(255, 255, 255, 0.03);
+    -fx-background-radius: 10px;
+    -fx-border-color: rgba(255, 255, 255, 0.07);
+    -fx-border-width: 1px;
+    -fx-border-radius: 10px;
+}
+.settings-list .list-cell {
+    -fx-font-family: "Poppins";
+    -fx-font-size: 0.92em;
+    -fx-text-fill: -text-primary;
+    -fx-background-color: transparent;
+}
+.settings-list .list-cell:filled:selected {
+    -fx-background-color: rgba(168, 235, 18, 0.16);
+}
+.settings-list .list-cell:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* ============================================================
+   v2.0 - INTERACTION POLISH
+   ------------------------------------------------------------
+   JavaFX CSS cannot transition, so the "animation" here is the
+   documented scale/colour substitution that JavaFX DOES support on
+   :hover and :pressed. It is a real, visible affordance and costs
+   nothing, but it is deliberately subtle: a control that visibly
+   grows on every hover is tiring over a long session, so the scale
+   deltas are ~2% and the real emphasis is in the background.
+
+   These are NOT gated by the Settings "Enable animations" switch
+   in THIS stylesheet. JavaFX has no way to conditionally include
+   a rule, so the gate is applied from outside: UiScale generates
+   a small override sheet and appends it after this file when
+   animations are off, re-declaring every scaled selector with
+   -fx-scale-x/y: 1. That override MUST be kept in step with the
+   selectors below; it is the only reason the switch has any
+   effect on the application's most frequently seen motion.
+
+   The background-colour and border changes in the same blocks
+   are NOT overridden, and that is deliberate: a colour swap is
+   an instant state change, not motion, and suppressing it would
+   leave the user with no feedback that a control is hoverable.
+   A static interface should still be usable.
+   ============================================================ */
+.accent-button:hover,
+.primary-button:hover {
+    -fx-background-color: -lime-green;
+    -fx-effect: dropshadow(gaussian, rgba(168, 235, 18, 0.55), 14, 0.35, 0, 0);
+    -fx-scale-x: 1.02;
+    -fx-scale-y: 1.02;
+}
+.accent-button:pressed,
+.primary-button:pressed {
+    -fx-scale-x: 0.97;
+    -fx-scale-y: 0.97;
+}
+
+.secondary-button:hover {
+    -fx-background-color: rgba(168, 235, 18, 0.14);
+    -fx-border-color: -glass-border;
+    -fx-scale-x: 1.02;
+    -fx-scale-y: 1.02;
+}
+.secondary-button:pressed {
+    -fx-background-color: rgba(168, 235, 18, 0.22);
+    -fx-scale-x: 0.97;
+    -fx-scale-y: 0.97;
+}
+
+.icon-button:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.10);
+    -fx-scale-x: 1.06;
+    -fx-scale-y: 1.06;
+}
+.icon-button:pressed {
+    -fx-background-color: rgba(255, 255, 255, 0.16);
+    -fx-scale-x: 0.92;
+    -fx-scale-y: 0.92;
+}
+
+.compact-button:hover {
+    -fx-scale-x: 1.02;
+    -fx-scale-y: 1.02;
+}
+
+/* Controls that are already selected must not look un-selected on hover -
+   a toggle whose hover state is identical to its rest state gives no
+   confirmation that the click registered. */
+.graph-toggle:selected:hover,
+.status-toggle-active:selected:hover,
+.status-toggle-stalled:selected:hover {
+    -fx-background-color: -lime-green;
+    -fx-text-fill: -deep-blue;
+}
+
+/* Focus rings. JavaFX's default focus styling is a thin dotted line that is
+   nearly invisible on a dark translucent panel, and keyboard navigation is
+   unusable without a clear indicator. */
+.button:focus,
+.toggle-button:focus,
+.combo-box:focus,
+.text-field:focus,
+.spinner:focus,
+.list-view:focus,
+.tab:focus {
+    -fx-border-color: -lime-green;
+    -fx-border-width: 2px;
+    -fx-border-radius: 8px;
+}
+
+/* Reduced-motion-friendly: the scale transforms are the only motion here, and
+   they are small enough to read as a press rather than an animation. */
+.glass-panel:hover {
+    -fx-border-color: rgba(168, 235, 18, 0.30);
+}
+
+/* ============================================================
+   v2.0 - PROJECTED COMPLETION (ETA)
+   ------------------------------------------------------------
+   A date is text, not a number, so at the full .metric-value size it
+   would dominate the metrics row. It is scaled down and given more
+   width instead, which keeps it reading as part of the same group
+   without competing with the headline percentage.
+   ============================================================ */
+.eta-value {
+    -fx-font-size: 1.38em;
+    -fx-text-fill: -inch-worm;
+    -fx-padding: 2 0 0 0;
+}
+/* "Reached" is the one state that deserves emphasis, and lime is already
+   the app's "good" colour - the same one the completion bar fills with. */
+.eta-value.eta-reached {
+    -fx-text-fill: -lime-green;
+}
+/* The muted case. The ETA's most common state is "Needs activity", and it
+   should read as informational rather than as an error. */
+.eta-value:disabled {
+    -fx-text-fill: -text-muted;
+}
+
+/* v2.0 - applied by FloatingTimerController for the duration of a drag.
+   Drops the shadow: it is a live blur, so the compositor had to recompute it
+   at every new window position, which is the single biggest cost in dragging
+   a TRANSPARENT window. It is invisible on a window that is moving anyway, so
+   removing it buys smoothness for nothing the eye misses. The border stays, so
+   the card keeps its shape against a busy desktop. */
+.float-timer-dragging {
+    -fx-effect: none;
+}
+
+/* ============================================================
+   SIDEBAR SCROLL VIEWPORT  (v2.0 - 1080p height regression)
+   ============================================================
+   The left column is wrapped in a ScrollPane so its height is bounded by the
+   window instead of by the sum of its three sections' preferred heights.
+
+   Every visual property here has to be neutralised, because a ScrollPane is
+   opaque, bordered and padded by default. Left at the defaults this would not
+   merely look wrong - it would look like the sidebar had gained a giant grey
+   box around it - and the padding would also eat into the 380px width budget
+   that the focus timer clock is calibrated against.
+
+   pannable is set so the scrollbar is only shown when it is actually needed:
+   a permanently-visible scrollbar on a column that usually fits would advertise
+   overflow that does not exist. */
+.sidebar-scroll {
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+    -fx-padding: 0;
+    -fx-fit-to-width: true;
+    -fx-hbar-policy: never;
+    -fx-vbar-policy: as-needed;
+}
+.sidebar-scroll > .viewport {
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+}
+/* The column itself must not clip, or the third section would vanish below the
+   fold with no way to reach it - which is the bug this viewport exists to fix. */
+.sidebar-column {
+    -fx-padding: 0 2 0 0;
+}
+
+/* A slim, low-contrast thumb. The default JavaFX scrollbar is wide enough to
+   cost real width out of a 300px column. */
+.sidebar-scroll .scroll-bar:vertical {
+    -fx-background-color: transparent;
+    -fx-pref-width: 8px;
+    -fx-background-radius: 4px;
+}
+.sidebar-scroll .scroll-bar:vertical .thumb {
+    -fx-background-color: rgba(255, 255, 255, 0.18);
+    -fx-background-radius: 4px;
+}
+.sidebar-scroll .scroll-bar:vertical .increment-button,
+.sidebar-scroll .scroll-bar:vertical .decrement-button {
+    -fx-background-color: transparent;
+    -fx-pref-height: 0;
+}
+.sidebar-scroll .scroll-bar:vertical .increment-arrow,
+.sidebar-scroll .scroll-bar:vertical .decrement-arrow {
+    -fx-background-color: transparent;
+    -fx-pref-height: 0;
+    -fx-pref-width: 0;
+}
+
+
+/* ============================================================
+   DIALOGS: ADVANCED LOG
+   ============================================================
+   Modena ships a light dialog, so every control inside one has to be
+   re-styled explicitly. The classes here are added from Java, because a
+   DialogPane cannot be an FXML root and so cannot carry a styleClass in a
+   view file. */
+
+/* Slightly more opaque than a dashboard panel. A dialog floats over the
+   app rather than living in it, and a 6% translucent panel over an already
+   translucent panel turns muddy. */
+.advanced-log-pane {
+    -fx-background-color: #0E1C2E;
+}
+
+/* Section captions: small, muted, uppercase-ish. Establishes the hierarchy
+   between the numeric inputs and the date choice, which previously ran
+   together with nothing but a separator between them. */
+.dialog-section-caption {
+    -fx-text-fill: -text-muted;
+    -fx-font-size: 0.82em;
+    -fx-font-family: "Poppins";
+}
+/* Field labels. minWidth is set from Java too - see dialogFieldLabel - but the
+   colour and size belong with the rest of the typography. */
+.dialog-field-label {
+    -fx-text-fill: -text-secondary;
+    -fx-font-size: 0.95em;
+    -fx-font-family: "Poppins";
+}
+/* The summary line, as a quiet info card rather than loose italic text on the
+   panel. It is the only thing telling the user what Save is about to do, so it
+   is given a shape that reads as a unit. */
+.info-banner {
+    -fx-background-color: rgba(168, 235, 18, 0.07);
+    -fx-border-color: rgba(168, 235, 18, 0.22);
+    -fx-border-radius: 8px;
+    -fx-padding: 10 12;
+}
+/* The modal action buttons. accent-button / secondary-button carry the colours;
+   this class only makes sure the DialogPane's own button bar is padded and that
+   the two buttons do not sit shoulder to shoulder. */
+.dialog-action-button {
+    -fx-min-width: 96px;
+}
+
+/* The Advanced Log dialog's own DatePickers. A marker class rather than a
+   descendant selector, because these live in a dialog pane that gets the base
+   stylesheet but no scene-specific styling of its own - and because it gives a
+   test something that is genuinely absent by default to assert on. */
+.advlog-date-picker {
+    -fx-font-family: "Poppins";
+}
+.advlog-date-picker .text-field {
+    -fx-font-size: 0.95em;
+}
+
+
+/* ============================================================
+   SETTINGS: PREVIEW THE CHANGE
+   ============================================================
+   A compact control, and one whose box NEVER MOVES on hover.
+
+   It used to be a full-width bar, which made two problems obvious that a compact
+   button does not have: a 600px-wide control to click a small demo on, and a
+   2% hover scale - invisible on a compact control - reading as a balloon
+   because the whole bar was moving.
+
+   The hover rules below RESTATE the padding and border width identically to the
+   rest state rather than relying on them being untouched. That is deliberate:
+   -fx-scale is a transform and never changes layout, but -fx-padding and
+   -fx-border-width DO, and a partial rule that only mentioned one of them is
+   exactly how a hover state starts nudging its own neighbours. Restating them
+   makes the invariant legible and keeps it true when the shared
+   .secondary-button rules are edited later.
+
+   The scale is kept, deliberately: this button exists to demonstrate the
+   animation setting, so a visible-but-restrained pulse is the point. 1.02 is
+   the same factor the other secondary controls use. */
+.preview-button {
+    -fx-padding: 7 14;
+    -fx-font-size: 0.9em;
+}
+.preview-button:hover {
+    -fx-background-color: rgba(168, 235, 18, 0.14);
+    -fx-border-color: -lime-green;
+    -fx-scale-x: 1.02;
+    -fx-scale-y: 1.02;
+    /* Identical to .preview-button. See the note above. */
+    -fx-padding: 7 14;
+    -fx-border-width: 1px;
+}
+.preview-button:pressed {
+    -fx-background-color: rgba(168, 235, 18, 0.22);
+    -fx-scale-x: 0.99;
+    -fx-scale-y: 0.99;
+    -fx-padding: 7 14;
+    -fx-border-width: 1px;
 }

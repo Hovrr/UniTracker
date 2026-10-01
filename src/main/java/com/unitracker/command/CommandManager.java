@@ -30,9 +30,19 @@ public class CommandManager {
 
     /** Runs the command, records it for undo, and clears the redo branch -
      *  exactly like every other editor's undo history (once you make a new
-     *  change, the old "future" you could have redone into is gone). */
+     *  change, the old "future" you could have redone into is gone).
+     *
+     *  <p>v2.0: a command that declined to act is NOT pushed onto the undo
+     *  stack. DeleteSkillCommand can legitimately refuse - the database
+     *  rejects a delete it cannot complete - and recording that as an executed
+     *  command would mean the next Ctrl+Z "undoes" a deletion that never
+     *  happened, restoring nodes that were never removed and stepping the real
+     *  history out of line with the database. A refusal is not history. */
     public void execute(Command command) {
         command.execute();
+        if (command instanceof DeleteSkillCommand delete && !delete.didDelete()) {
+            return; // nothing changed, so there is nothing to undo
+        }
         undoStack.push(command);
         while (undoStack.size() > MAX_HISTORY) {
             undoStack.removeLast();

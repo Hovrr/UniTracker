@@ -69,7 +69,29 @@ public class MainApp extends Application {
         primaryStage.setMinHeight(Math.min(700, screen.getHeight()));
         loadWindowIcons(primaryStage);
         primaryStage.show();
+
+        // v2.0: hand the controller a way to close the floating timer on exit.
+        // A still-visible StageStyle.TRANSPARENT always-on-top window keeps the
+        // JVM's toolkit threads alive, so without this the process appears to
+        // hang on exit and leaves an orphaned widget on the desktop. The
+        // controller is asked to close it rather than reaching in here, so the
+        // MainApp-to-controller coupling stays one-directional and typed.
+        if (loader.getController() instanceof com.unitracker.controller.DashboardController controller) {
+            controller.attachPrimaryStage(primaryStage);
+        }
     }
+
+    /**
+     * v2.0. Lets {@code DashboardController} cache the primary stage.
+     *
+     * <p>Without it the controller has to rediscover the stage by walking
+     * {@code root.getScene().getWindow()}, which is fine for reading position
+     * but impossible for the things it now needs to do - hiding it to reveal
+     * the floating widget, and closing the widget on shutdown. The stage
+     * parameterised form of {@code show(Stage, Consumer<Stage>)} already
+     * gives a controlled way to hand it over without widening the controller's
+     * public surface to a bare {@code Stage} field.
+     */
 
     /**
      * Puts the app logo on the Windows title bar and taskbar.
@@ -108,7 +130,6 @@ public class MainApp extends Application {
         // Release the SQLite file lock cleanly when the window is closed.
         DatabaseHelper.getInstance().closeConnection();
     }
-
     /**
      * Loads Space Grotesk / Poppins from resources/com/unitracker/fonts.
      * See the fonts folder's PLACE_FONTS_HERE.txt for exact download links.

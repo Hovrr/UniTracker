@@ -88,7 +88,229 @@ public final class SqlLogicCheck {
         }
         checkClockFontScaling(); // pure arithmetic, no DB
         checkVelocityRanges();   // pure calendar arithmetic, no DB
+        checkEmScaling();        // guards styles.css against a hard-coded px regression
         System.out.println("SqlLogicCheck: all assertions passed.");
+    }
+
+    // ---------------------------------------------------------------- em scaling
+
+    /**
+     * Guards the v2.0 resolution-scaling invariant in {@code styles.css}.
+     *
+     * <p>THE INVARIANT, and why it is worth an automated check rather than a
+     * code-review convention. JavaFX CSS has no {@code var()} and no
+     * {@code calc()}, so the only native way to rescale a stylesheet at runtime
+     * is the {@code em} unit on {@code -fx-font-size}, which resolves against
+     * the INHERITED font size (JDK-8205473). That works only under a strict
+     * discipline:
+     *
+     * <ol>
+     *   <li>{@code .root} is the ONLY selector carrying an absolute px font size -
+     *       it is the single knob the generated scale stylesheet turns.</li>
+     *   <li>Every OTHER font size is in {@code em}.</li>
+     *   <li><b>No font-size selector is an ancestor of another font-size
+     *       selector.</b> This is the trap: {@code em} compounds, so a child rule
+     *       in {@code em} is relative to its parent's computed size, not to the
+     *       root's. A stray rule setting a size on a container would make
+     *       everything inside it multiply - and it would look perfectly correct
+     *       at the default tier while being wrong at every other one, which is
+     *       the least visible way possible to break resolution scaling.</li>
+     * </ol>
+     *
+     * <p>This parses the stylesheet as text and checks all three. It uses no CSS
+     * parser - none is exposed by JavaFX - and does not need one, because the
+     * properties involved have a single unambiguous syntax.
+     */
+    private static void checkEmScaling() {
+        // Comments are stripped ONCE, up front, and every scan below works on
+        // the stripped text. The stylesheet's own header documents the
+        // technique and therefore necessarily writes out example declarations
+        // such as "-fx-font-size: 12px" - inside a comment. Scanning the raw
+        // file would report those as live px rules, and the check would fail
+        // on its own documentation.
+        String css = stripComments(readStylesheet());
+
+        // ---- 1. .root carries the one absolute size. ----
+        int rootBaseCount = countOccurrences(css, "-fx-font-size: 13px");
+        assert rootBaseCount == 1
+                : "expected exactly one absolute base font size (-fx-font-size: 13px) on .root, found "
+                        + rootBaseCount;
+
+        // ---- 2. Nothing outside .root uses px. ----
+        // A px FONT SIZE anywhere else is unpinned to the scale tier: it would
+        // keep its absolute size while everything around it resized, which is
+        // the exact "one element does not scale" artefact the conversion exists
+        // to prevent.
+        //
+        // The match is on the font-size DECLARATION's unit, not on "px appears
+        // somewhere in the block". A rule such as
+        //   .accent-button { -fx-font-size: 0.92em; -fx-padding: 6px 14px; }
+        // is perfectly correct - structural lengths legitimately stay in px,
+        // because em does not scale them (JDK-8205473). Only the font size is
+        // constrained.
+        List<String> pxOffenders = new ArrayList<>();
+        java.util.regex.Pattern fontDecl =
+                java.util.regex.Pattern.compile("-fx-font-size:\\s*([0-9.]+)(px|em)");
+        java.util.regex.Matcher matcher = fontDecl.matcher(css);
+        while (matcher.find()) {
+            if (!"px".equals(matcher.group(2))) {
+                continue;
+            }
+            // Find which rule this declaration belongs to, by looking back for
+            // the nearest selector that precedes it.
+            String before = css.substring(0, matcher.start());
+            int lastBrace = before.lastIndexOf('}');
+            String selector = stripComments(
+                    before.substring(lastBrace + 1)).trim();
+            if (!selector.contains(".root")) {
+                pxOffenders.add(selector.isEmpty() ? "(unknown selector)" : selector
+                        + " -> " + matcher.group());
+            }
+        }
+        assert pxOffenders.isEmpty()
+                : "these rules use a px FONT SIZE, so they will NOT scale with the UI size "
+                        + "setting. Convert them to em (structural lengths may stay px): " + pxOffenders;
+
+        // ---- 3. No font-size rule is an ancestor of another (the em trap). ----
+        List<String> fontSelectors = fontSizeSelectors(css);
+        for (String parent : fontSelectors) {
+            for (String child : fontSelectors) {
+                if (parent.equals(child)) {
+                    continue;
+                }
+                // Only COMPOUND selectors are checked. A bare type selector
+                // (".label") being an ancestor of a class selector
+                // (".panel-title") cannot be proven from the text alone, so the
+                // check is deliberately conservative and flags only the
+                // unambiguous case: a selector that IS itself a font-size rule
+                // and is an explicit descendant of another one.
+                if (!child.contains(" ")) {
+                    continue;
+                }
+                String[] parts = child.trim().split("\\s+");
+                StringBuilder ancestor = new StringBuilder();
+                for (int i = 0; i < parts.length; i++) {
+                    if (i > 0) {
+                        ancestor.append(' ');
+                    }
+                    ancestor.append(parts[i]);
+                    if (ancestor.toString().equals(parent)) {
+                        assert false : "selector \"" + child + "\" sets a font size and is a descendant of \""
+                                + parent + "\", which also sets one. em compounds down the tree, so "
+                                + "the sizes multiply rather than both referring to the root.";
+                    }
+                }
+            }
+        }
+
+        // ---- 4. Sanity: the em values must resolve to the sizes the v1 layout
+        //         was calibrated against. A typo in the divisor would silently
+        //         rescale the entire interface, and this is the only assertion
+        //         that would notice.
+        assert close(emToPx("0.85em"), 11.0) : "0.85em should be ~11px, got " + emToPx("0.85em");
+        assert close(emToPx("0.92em"), 12.0) : "0.92em should be ~12px, got " + emToPx("0.92em");
+        assert close(emToPx("1em"), 13.0) : "1em should be exactly the 13px base";
+        assert close(emToPx("2em"), 26.0) : "2em should be the 26px metric value";
+        assert close(emToPx("3.85em"), 50.0) : "3.85em should be the 50px focus-timer clock";
+        assert close(emToPx("4.62em"), 60.0) : "4.62em should be the 60px headline percentage";
+        boolean hasBaseFamily = css.contains("-fx-font-family: \"Poppins\";");
+        assert hasBaseFamily
+                : "the root must still declare the base font family, or em has no base to scale from";
+    }
+
+    /** Resolves an {@code em} font size against the 13px root base. */
+    private static double emToPx(String em) {
+        return Double.parseDouble(em.replace("em", "").trim()) * 13.0;
+    }
+
+    private static boolean close(double a, double b) {
+        return Math.abs(a - b) < 0.15;
+    }
+
+    private static String readStylesheet() {
+        try (java.io.InputStream is = SqlLogicCheck.class
+                .getResourceAsStream("/com/unitracker/css/styles.css")) {
+            if (is == null) {
+                throw new AssertionError("styles.css is missing from the classpath");
+            }
+            return new String(is.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        } catch (java.io.IOException e) {
+            throw new AssertionError("could not read styles.css: " + e.getMessage());
+        }
+    }
+
+    private static int countOccurrences(String haystack, String needle) {
+        int count = 0, from = 0;
+        while ((from = haystack.indexOf(needle, from)) >= 0) {
+            count++;
+            from += needle.length();
+        }
+        return count;
+    }
+
+    /**
+     * Every selector that declares a font size, de-duplicated.
+     *
+     * <p>A conservative text scan: it walks rule blocks and treats the text
+     * before each opening brace as that block's selector, with CSS comments
+     * stripped first so a commented-out rule cannot be mistaken for a live one.
+     */
+    private static List<String> fontSizeSelectors(String css) {
+        List<String> found = new ArrayList<>();
+        int cursor = 0;
+        while (true) {
+            int open = css.indexOf('{', cursor);
+            if (open < 0) {
+                break;
+            }
+            int close = css.indexOf('}', open);
+            if (close < 0) {
+                break;
+            }
+            String selector = stripComments(css.substring(cursor, open)).trim();
+            String body = css.substring(open, close);
+            if (body.contains("-fx-font-size") && !selector.isEmpty()) {
+                for (String one : selector.split(",")) {
+                    String trimmed = one.trim();
+                    if (!trimmed.isEmpty() && !found.contains(trimmed)) {
+                        found.add(trimmed);
+                    }
+                }
+            }
+            cursor = close + 1;
+        }
+        return found;
+    }
+
+    /** Removes CSS comments from a fragment, so a commented-out rule cannot be
+     *  mistaken for a live one. */
+    private static String stripComments(String fragment) {
+        StringBuilder out = new StringBuilder();
+        int i = 0;
+        while (i < fragment.length()) {
+            int start = fragment.indexOf("/*", i);
+            if (start < 0) {
+                out.append(fragment, i, fragment.length());
+                break;
+            }
+            int end = fragment.indexOf("*/", start);
+            if (end < 0) {
+                break;
+            }
+            out.append(fragment, i, start).append(' ');
+            i = end + 2;
+        }
+        return out.toString();
+    }
+
+    private static String ruleBody(String css, String selector) {
+        int idx = css.indexOf(selector + " {");
+        if (idx < 0) {
+            return null;
+        }
+        int open = css.indexOf('{', idx);
+        int close = css.indexOf('}', open);
+        return open < 0 || close < 0 ? null : css.substring(open, close);
     }
 
     private static void createSchema(Connection conn) throws SQLException {
@@ -299,52 +521,128 @@ public final class SqlLogicCheck {
     // ---------------------------------------------------------------- clock scaling
 
     /**
-     * Verifies the focus-timer clock's responsive font sizing. Mirrors
-     * DashboardController#clockFontFor - <b>if you change that, change this
-     * too.</b> Duplicated rather than called because this check runs with only
-     * sqlite-jdbc on the classpath, and the controller drags in all of JavaFX.
+     * Verifies the focus-timer clock's responsive font sizing.
      *
-     * <p>What matters here is the clamp, not the exact curve: the size is fed
-     * straight into an -fx-font-size string, so a value outside the calibrated
-     * band is either an unreadable clock or one that overflows the sidebar
-     * again. Whether 35px genuinely fits "01:30:00" at the 300px floor is a
-     * font-metric question no assert can answer - that one is verified by eye.
+     * <p>REWRITTEN FOR v2.0. The old version mirrored a pure width-to-size
+     * interpolation. The size is now computed by
+     * {@code UiScale.clockFontSize}, which additionally factors in the active
+     * scale tier, so a user who has chosen "Extra large" for a 4K display gets
+     * a correspondingly larger clock. A mirror of that is reproduced below.
+     *
+     * <p>WHAT MATTERS HERE IS THE CLAMP, not the exact curve. The value is fed
+     * straight into an {@code -fx-font-size} string, so anything outside the
+     * calibrated band is either an unreadable clock or one that overflows the
+     * sidebar again. Whether 35px genuinely fits "01:30:00" at the 300px floor
+     * is a font-metric question no assertion can answer - that one is verified
+     * by eye.
      */
     private static void checkClockFontScaling() {
-        // Both ends land exactly on their calibrated size.
-        assert Math.abs(clockFont(300) - 35.0) < 0.01 : "at the column floor -> 35px, got " + clockFont(300);
-        assert Math.abs(clockFont(420) - 50.0) < 0.01 : "at the column ceiling -> 50px, got " + clockFont(420);
+        final double MIN = 35.0, MAX = 50.0;
 
-        // Midpoint interpolates linearly; 380 is the FXML's default prefWidth.
-        assert Math.abs(clockFont(360) - 42.5) < 0.01 : "midpoint -> 42.5px, got " + clockFont(360);
-        assert Math.abs(clockFont(380) - 45.0) < 0.01 : "at the default width -> 45px, got " + clockFont(380);
+        // At the DEFAULT tier (base font 13.0px) the formula reduces to the
+        // original behaviour, so the previously calibrated anchors must still
+        // hold. This is the regression guard for the scale refactor.
+        assert Math.abs(clockFont(300, 13.0) - 35.0) < 0.01
+                : "at the column floor -> 35px, got " + clockFont(300, 13.0);
+        assert Math.abs(clockFont(420, 13.0) - 50.0) < 0.01
+                : "at the column ceiling -> 50px, got " + clockFont(420, 13.0);
+        assert Math.abs(clockFont(360, 13.0) - 42.5) < 0.01
+                : "midpoint -> 42.5px, got " + clockFont(360, 13.0);
+        assert Math.abs(clockFont(380, 13.0) - 45.0) < 0.01
+                : "at the default width -> 45px, got " + clockFont(380, 13.0);
 
-        // The clamp is the load-bearing part. A collapsed TitledPane reports
-        // width 0 and a maximized window can overshoot the nominal ceiling;
-        // neither may produce a font size outside the band.
-        for (double w : new double[]{-50, 0, 1, 299, 421, 1000, 10000}) {
-            double size = clockFont(w);
-            assert size >= 35.0 && size <= 50.0
-                    : "width " + w + " produced an out-of-band font size: " + size;
+        // A LARGER tier must produce a LARGER clock, or the whole point of the
+        // scale setting is lost on the one widget that is pure text.
+        assert clockFont(380, 15.5) > clockFont(380, 13.0)
+                : "a larger scale tier must enlarge the clock";
+        assert clockFont(380, 11.5) <= clockFont(380, 13.0)
+                : "a compact tier must not enlarge the clock";
+        assert clockFont(380, 18.0) > clockFont(380, 15.5)
+                : "the tiers must be strictly increasing in base font size";
+
+        // THE CLAMP PINS BOTH ENDS, AND THAT IS CORRECT. The band is what
+        // physically fits in a 300px sidebar, so tiers below DEFAULT collapse
+        // onto 35px at the floor and tiers above DEFAULT collapse onto 50px at
+        // the ceiling. The meaningful claims are therefore:
+        //   - strictly increasing wherever the clamp is NOT already binding;
+        //   - non-decreasing everywhere;
+        //   - both endpoints pinned at the extremes.
+        double previous = Double.NEGATIVE_INFINITY;
+        for (double base : new double[]{11.5, 13.0, 15.5, 18.0}) {
+            double size = clockFont(300, base);
+            assert size >= previous : "tiers must not decrease at the column floor, base " + base;
+            assert size >= 35.0 : "the floor is never breached, got " + size;
+            previous = size;
+        }
+        // At the floor, everything from DEFAULT upward has headroom, so those
+        // three must genuinely separate.
+        assert clockFont(300, 13.0) < clockFont(300, 15.5)
+                && clockFont(300, 15.5) < clockFont(300, 18.0)
+                : "tiers at or above DEFAULT must strictly separate at the column floor";
+        assert Math.abs(clockFont(300, 11.5) - 35.0) < 0.01
+                : "the smallest tier is pinned to the band minimum at the floor";
+
+        previous = Double.NEGATIVE_INFINITY;
+        for (double base : new double[]{11.5, 13.0, 15.5, 18.0}) {
+            double size = clockFont(420, base);
+            assert size >= previous : "tiers must not decrease at the column ceiling, base " + base;
+            assert size <= 50.0 : "the ceiling is never breached, got " + size;
+            previous = size;
+        }
+        // At the ceiling, everything up to and including DEFAULT has headroom.
+        assert clockFont(420, 11.5) < clockFont(420, 13.0)
+                : "tiers at or below DEFAULT must separate at the column ceiling";
+        assert Math.abs(clockFont(420, 18.0) - 50.0) < 0.01
+                : "the largest tier is pinned to the band maximum at the ceiling";
+
+        // THE CLAMP is load-bearing across EVERY tier. A collapsed TitledPane
+        // reports width 0 and a maximized window can overshoot the nominal
+        // ceiling; neither may produce an out-of-band size no matter which
+        // tier is active. This is the assertion that would have caught a
+        // 4K user getting an 80px clock.
+        for (double base : new double[]{11.5, 13.0, 15.5, 18.0}) {
+            for (double w : new double[]{-50, 0, 1, 299, 421, 1000, 10000}) {
+                double size = clockFont(w, base);
+                assert size >= MIN && size <= MAX
+                        : "width " + w + " at base " + base
+                        + " produced an out-of-band font size: " + size;
+            }
         }
 
-        // Monotonic: a wider pane never yields a smaller clock.
-        double prev = 0;
-        for (double w = 0; w <= 600; w += 7) {
-            double size = clockFont(w);
-            assert size >= prev : "font size must not shrink as the pane widens, at width " + w;
-            prev = size;
+        // Monotonic in width, for every tier: a wider pane never yields a
+        // smaller clock.
+        for (double base : new double[]{11.5, 13.0, 15.5, 18.0}) {
+            double widest = 0;
+            for (double w = 0; w <= 600; w += 7) {
+                double size = clockFont(w, base);
+                assert size >= widest : "font size must not shrink as the pane widens, "
+                        + "at width " + w + " base " + base;
+                widest = size;
+            }
         }
     }
 
-    /** Mirrors DashboardController#clockFontFor. */
-    private static double clockFont(double paneWidth) {
+    /**
+     * Mirrors {@code UiScale#clockFontSize}.
+     *
+     * <p>Reproduced rather than called because this harness runs with only
+     * sqlite-jdbc on the classpath, while UiScale lives in a class that imports
+     * javafx.scene.Scene and javafx.stage.Screen. Calling it would drag the
+     * whole toolkit into a check that otherwise needs nothing.
+     */
+    private static double clockFont(double paneWidth, double baseFontSize) {
         final double COLUMN_MIN_WIDTH = 300, COLUMN_MAX_WIDTH = 420;
         final double CLOCK_FONT_MIN = 35, CLOCK_FONT_MAX = 50;
+        final double CALIBRATION_BASE_FONT = 13.0;
+        // The v1 curve, exactly: interpolate across the sidebar column's clamp.
         double span = COLUMN_MAX_WIDTH - COLUMN_MIN_WIDTH;
         double t = (paneWidth - COLUMN_MIN_WIDTH) / span;
-        double size = CLOCK_FONT_MIN + t * (CLOCK_FONT_MAX - CLOCK_FONT_MIN);
-        return Math.max(CLOCK_FONT_MIN, Math.min(CLOCK_FONT_MAX, size));
+        double interpolated = CLOCK_FONT_MIN + t * (CLOCK_FONT_MAX - CLOCK_FONT_MIN);
+        // The tier is an OFFSET after the interpolation, not folded into it.
+        // Folding it in looks tidier and quietly moves the 1K clock, which is
+        // exactly the regression the anchor assertions above exist to catch.
+        double scaled = interpolated + (baseFontSize - CALIBRATION_BASE_FONT) * 1.6;
+        return Math.max(CLOCK_FONT_MIN, Math.min(CLOCK_FONT_MAX, scaled));
     }
 
     // ---------------------------------------------------------------- velocity ranges

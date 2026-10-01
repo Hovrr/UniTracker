@@ -6,7 +6,7 @@
 
     <groupId>com.unitracker</groupId>
     <artifactId>uni-tracker</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>2.0.0</version>
     <packaging>jar</packaging>
     <name>Uni Tracker</name>
     <description>Offline multi-skill progress tracker (PoC) - Java/JavaFX/SQLite</description>
@@ -35,6 +35,11 @@
         <sqlite.jdbc.version>3.53.2.0</sqlite.jdbc.version>
         <flexmark.version>0.64.8</flexmark.version>
         <pdfbox.version>3.0.7</pdfbox.version>
+
+        <!-- v2.0: JUnit 5 (Jupiter aggregator). 5.11.x is the current stable
+             line and requires Java 17+, which this project already assumes. -->
+        <junit.version>5.11.4</junit.version>
+        <surefire.version>3.5.2</surefire.version>
 
         <mainClass>com.unitracker.MainApp</mainClass>
     </properties>
@@ -97,6 +102,44 @@
             <artifactId>pdfbox</artifactId>
             <version>${pdfbox.version}</version>
         </dependency>
+
+        <!-- ================= TESTING (v2.0) =================
+             JUnit 5 is TEST SCOPE ONLY, so it never reaches the shaded jar
+             or the packaged .exe.
+
+             IMPORTANT - WHY THE devcheck HARNESSES STILL EXIST AND ARE STILL
+             PRIMARY. This project has no src/test/java and no test tooling
+             until now; devcheck/* are plain main() classes run with -ea
+             against a sandboxed user.home (see run-tests.py). They are not
+             going away, for two concrete reasons:
+
+               1. They run with ZERO dependencies. run-tests.py works offline
+                  today, with nothing but the jars already on the machine.
+               2. The FXML and floating-timer harnesses need a JavaFX
+                  TOOLKIT and a module path (javafx.web and javafx.media for
+                  WebView and AudioClip). Surefire would need the JVM
+                  "add-modules" flag plus a headless-display story to do that
+                  reliably, which is a fragile thing to require of every
+                  future build.
+
+             (Note for maintainers: the literal double-dash JVM flag names
+             cannot be written here. The XML 1.0 specification forbids a
+             double hyphen anywhere inside a comment, so writing the flag
+             verbatim makes this POM unparseable - Maven reports "in comment
+             after two dashes, next character must be >". Refer to the flag by
+             name instead, as above.)
+
+             So the JUnit suite below covers the PURE logic - timer
+             arithmetic, point derivation, scaling maths, the preset parser -
+             which needs no toolkit and runs anywhere. The devcheck harnesses
+             remain the authority for anything that must actually load FXML or
+             open a database. Both run; neither is redundant. -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -109,8 +152,45 @@
             </plugin>
 
             <!--
-                Runs the app with the correct module-path/add-modules flags
-                automatically. This is THE standard fix for the classic
+                Runs the JUnit 5 suite in src/test/java.
+                
+                The JAVAFX MODULES ARE NOT ADDED HERE, deliberately. Every test
+                in the suite is pure logic - timer arithmetic, point
+                derivation, scaling maths, the milestone parser - so none of
+                them need a toolkit. That is what makes `mvn test` work on a
+                headless build agent with no display and no module path. The
+                tests that genuinely DO need a toolkit (anything that loads
+                FXML or opens a WebEngine) live in the devcheck harnesses and
+                are run by run-tests.py / devcheck-fxml.py, which set the
+                module path explicitly.
+                
+                forkCount=1 with reuseForks=false: DatabaseHelper is a SINGLETON
+                backed by a file, and a test that leaves a running timer session
+                or a preset behind would be visible to whichever test happens
+                to run next in the same JVM. One fresh JVM per test class makes
+                that impossible rather than merely unlikely.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${surefire.version}</version>
+                <configuration>
+                    <forkCount>1</forkCount>
+                    <reuseForks>false</reuseForks>
+                    <!-- Each test class gets a throwaway user.home, so a test
+                         can never open the real ~/.unitracker/unitracker.db.
+                         DatabaseHelper derives its path from that property in a
+                         static initialiser, which is exactly what makes this
+                         possible. -->
+                    <systemPropertyVariables>
+                        <user.home>${project.build.directory}/surefire-home</user.home>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+
+            <!--
+                Runs `mvn javafx:run` with the correct module-path/add-modules
+                flags automatically. This is THE standard fix for the classic
                 "Error: JavaFX runtime components are missing" problem that
                 happens when JavaFX is launched like a normal jar on JDK 11+.
                 Usage: mvn javafx:run  (see the NetBeans setup guide below).

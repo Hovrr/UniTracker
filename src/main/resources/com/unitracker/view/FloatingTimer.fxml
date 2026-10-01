@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ProgressBar?>
+<?import javafx.scene.control.Tooltip?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.shape.SVGPath?>
+
+<!--
+    ============================================================================
+    FLOATING TIMER  (v2.0)
+    ============================================================================
+    A minimal always-on-top widget for running a focus session while the main
+    dashboard is hidden. Deliberately tiny: it is meant to sit in a corner of
+    the screen and stay out of the way, so it carries a clock, a progress bar,
+    the target skill, and three buttons. Nothing else.
+
+    ============================================================================
+    WHY THIS FILE HAS NO TIMER IN IT
+    ============================================================================
+    There is no AnimationTimer, no Timeline and no countdown state anywhere in
+    this view, and that is the single most important property of the design.
+
+    The obvious implementation gives the widget its own timer that ticks down a
+    local counter. Two consequences follow immediately:
+
+      1. DRIFT. Two independent tickers never agree. The dashboard would read
+         24:59 while the widget read 24:58, and a user who trusted one of them
+         would be misled. Worse, whichever tick is scheduled later keeps
+         accumulating small rounding differences over a 25-minute session.
+      2. A HANDOFF GAP. Popping out or docking would have to transfer a counter
+         between two owners. That transfer is exactly where seconds go missing,
+         and it is the failure the v2.0 requirement ("the timer must not reset
+         if the application is closed") is really about, just made smaller.
+
+    So the widget is a PURE OBSERVER. DashboardController owns the single
+    AnimationTimer and the single absolute deadline, and each tick it computes
+    the remaining time ONCE and pushes that single value to every view. Two
+    views therefore cannot disagree, and the pop-out handoff involves no time
+    arithmetic at all - there is no counter to copy, only a label to re-parent.
+
+    ============================================================================
+    WHY THE ROOT IS A TRANSPARENT STACKPane
+    ============================================================================
+    The stage is StageStyle.TRANSPARENT, which requires BOTH:
+      - the scene fill set to null (done in FloatingTimerWindow), and
+      - the root node's own background transparent.
+    The outer StackPane is transparent and only the inner card carries a
+    background, so the user sees a rounded card floating over their desktop with
+    no rectangular window border around it.
+
+    The 14px padding on the StackPane is deliberate dead space: it gives the
+    drop shadow room to render without being clipped by the stage bounds, which
+    is what produces the hard dark edge that makes a transparent JavaFX stage
+    look cheap.
+
+    pickOnBounds="true" ON THE ROOT, and it is not cosmetic.
+
+    With pickOnBounds="false" the root only claims a mouse press where it has
+    painted something. The padding ring is transparent by definition, so that
+    whole border of the window was not the widget's - a press that landed in it
+    fell through to the window behind. During a drag that produced the worst
+    possible symptom: the widget would follow the cursor across the card, then
+    die the moment the cursor reached the edge, and come back only after the
+    user pressed again. Windows' DWM does per-pixel hit testing on a layered
+    transparent window, so a fully transparent pixel really does belong to
+    whatever is underneath.
+
+    pickOnBounds makes the root claim its whole rectangular bounds regardless of
+    paint, which is exactly what a drag target needs. It does NOT make the root
+    visible - paint is a separate question - so the widget still looks like a
+    floating card with a soft shadow rather than a rectangle.
+    ============================================================================
+-->
+<StackPane xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml"
+           fx:controller="com.unitracker.controller.FloatingTimerController"
+           styleClass="float-timer-root" pickOnBounds="true">
+
+    <!-- The card. fx:id'd so the controller can drag the window by it, since a
+         transparent stage has no title bar to drag.
+
+         NOTE THE COMMA. FXML's styleClass attribute is COMMA-separated, not
+         space-separated. This is the one genuinely easy thing to get wrong
+         here, because a space-separated list loads with no error at all and
+         produces a single style class literally named
+         "glass-panel float-timer-card" - which then matches no CSS rule. The
+         widget appears completely unstyled and still runs, so the only way to
+         catch it is an assertion like devcheck/FxmlCheck's, which checks the
+         card actually carries the class. -->
+    <VBox fx:id="card" styleClass="glass-panel, float-timer-card" spacing="8"
+          pickOnBounds="true" mouseTransparent="false">
+
+        <!-- Drag handle row: skill name on the left, dock button on the right.
+             The whole card is draggable, but an explicit affordance here tells
+             the user that the thing is movable. -->
+        <HBox alignment="CENTER_LEFT" spacing="8">
+            <!-- A long skill name must not stretch the card past its fixed
+                 stage width, so the label is capped and CLIPS.
+                 JavaFX 25's Labeled has no ellipsis or truncation property at
+                 all (both "ellipsis" and "textTruncationPolicy" throw
+                 PropertyNotFoundException), so a tooltip carries the full name
+                 instead - see setToolTip in FloatingTimerController. -->
+            <Label fx:id="skillLabel" text="" styleClass="float-timer-skill"
+                   maxWidth="210"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <!-- v2.0: SVGPath, NOT a text glyph.
+
+                 This button used to carry text="&#x23CB;" (U+23CB RETURN
+                 SYMBOL) and rendered as a solid white box on any machine whose
+                 fonts lack that codepoint. The return/enter arrows live in
+                 obscure symbol-plane fonts that many Windows images simply do
+                 not ship, and a missing glyph renders as a filled box - so the
+                 button read as an unstyled white rectangle.
+
+                 An SVGPath is drawn by JavaFX itself and is therefore identical
+                 on every machine, with no font dependency at all.
+
+                 It is wrapped in a fixed-size StackPane because a Button whose
+                 only content is a graphic has no intrinsic width of its own;
+                 without the wrapper the button collapses to nothing.
+
+                 Coordinates are in a 0..16 box, so the optical size matches
+                 what a text glyph would have had.
+
+                 THREE SPELLING TRAPS IN THE ATTRIBUTES BELOW, all of
+                 which fail at LOAD time rather than at compile time:
+
+                 1. fill="transparent", NOT fill="none". "none" is correct
+                    CSS, but FXML coerces a Paint through Paint.valueOf ->
+                    Color.web(), which knows named colours and "transparent"
+                    and nothing else. "none" throws "Invalid color
+                    specification". JavaFX's Shape default fill is black, so
+                    the transparent has to be stated.
+                 2. strokeWidth / strokeLineCap / strokeLineJoin, NOT
+                    stroke-width / stroke-line-cap / stroke-linejoin. Those
+                    hyphenated forms are the -fx- CSS property names, and
+                    this is a BEAN property on Shape, not a CSS rule. FXML
+                    does not translate between the two vocabularies.
+                 3. #E7ECF3 rather than a lookup colour name, so the icon
+                    cannot change under a theme swap. -->
+            <Button fx:id="dockButton" styleClass="icon-button, float-timer-dock">
+                <graphic>
+                    <StackPane prefWidth="16" prefHeight="16">
+                        <SVGPath content="M 13 8 L 3 8 M 9 2 L 3 8 L 9 14"
+                                 fill="transparent" stroke="#E7ECF3" strokeWidth="1.7"
+                                 strokeLineCap="round" strokeLineJoin="round"/>
+                    </StackPane>
+                </graphic>
+                <tooltip><Tooltip text="Put the timer back in the dashboard"/></tooltip>
+            </Button>
+        </HBox>
+
+        <!-- The clock. minWidth="0" is load-bearing: without it the label pins
+             at its full text width and, on a long hh:mm:ss, forces the card
+             wider than the stage and clips the buttons. -->
+        <Label fx:id="clockLabel" text="25:00" styleClass="float-timer-clock"
+               minWidth="0" maxWidth="260" alignment="CENTER"/>
+
+        <ProgressBar fx:id="progressBar" progress="0" maxWidth="Infinity"
+                     styleClass="pomodoro-bar"/>
+
+        <!-- Controls. minWidth="0" on the spacer rather than hgrow on the
+             clock for the same reason the sidebar panel does it that way: an
+             hgrow-ing clock would claim space it does not need and shove the
+             buttons off the card at small sizes. -->
+        <HBox alignment="CENTER" spacing="8">
+            <Button fx:id="playPauseButton" text="Pause" styleClass="accent-button, compact-button"/>
+            <!-- Same reasoning as the dock button: a reset glyph in a symbol
+                 font is a missing-glyph box on most machines. -->
+            <Button fx:id="resetButton" styleClass="icon-button">
+                <graphic>
+                    <StackPane prefWidth="16" prefHeight="16">
+                        <SVGPath content="M 13.5 5.5 A 5.5 5.5 0 1 0 14 9"
+                                 fill="transparent" stroke="#E7ECF3" strokeWidth="1.7"
+                                 strokeLineCap="round"/>
+                        <SVGPath content="M 13.5 2.2 L 13.5 5.6 L 10.1 5.6"
+                                 fill="transparent" stroke="#E7ECF3" strokeWidth="1.7"
+                                 strokeLineCap="round" strokeLineJoin="round"/>
+                    </StackPane>
+                </graphic>
+                <tooltip><Tooltip text="Discard this session and start fresh"/></tooltip>
+            </Button>
+        </HBox>
+
+        <Label fx:id="stateLabel" text="" styleClass="float-timer-state"/>
+    </VBox>
+</StackPane>

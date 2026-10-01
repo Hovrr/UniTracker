@@ -15,6 +15,8 @@ dependency-reduced-pom.xml
 
 # Log & OS generated files
 *.log
+__pycache__/
+*.pyc
 .DS_Store
 .DS_Store?
 ._*

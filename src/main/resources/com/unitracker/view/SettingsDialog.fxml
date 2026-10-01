@@ -1,0 +1,263 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.CheckBox?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.Spinner?>
+<?import javafx.scene.control.Tab?>
+<?import javafx.scene.control.TabPane?>
+<?import javafx.scene.control.TextArea?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.control.Tooltip?>
+<?import javafx.scene.layout.ColumnConstraints?>
+<?import javafx.scene.layout.GridPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Priority?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+
+<!--
+    ============================================================================
+    SETTINGS DIALOG  (v2.0)
+    ============================================================================
+    Three tabs, grouped by what the setting actually changes:
+
+      Appearance   - how the app feels. Animations, and the UI scale.
+      Focus Timer  - what a session is worth. The reward schedule and the
+                     level threshold.
+      Progress     - the goal vocabulary. Mastery curves, and which one a new
+      Presets        skill starts from.
+
+    ===========================================================================
+    NOTHING HERE IS A DRAFT
+    ===========================================================================
+    The most important property of this dialog is that it is NOT a staging area
+    with an OK button. Every control writes through to the database the moment
+    it is committed, and the running application reads the new value on its very
+    next use. There is deliberately no Apply and no Cancel, because a Cancel
+    that appeared to work but silently discarded a scale change the user could
+    already SEE applied in the preview is a far worse experience than having no
+    such concept at all.
+
+    The exception is the Focus Timer reward grid, where a half-typed number like
+    "3." is not a valid value. Those spinners commit per spinner (so a
+    legitimate value is never lost) and simply ignore text that does not parse
+    yet, which is what a spinner is for.
+
+    ===========================================================================
+    WHY THE REWARD GRID IS BUILT IN CODE
+    ===========================================================================
+    The rows are generated from one duration list rather than written out
+    statically, so adding a preset to the timer cannot leave this file out of
+    step with it. A static grid silently falls behind, and then the UI and the
+    actual reward schedule disagree - which is invisible until a user is shorted
+    points on a 90-minute block.
+
+    NOTE: styleClass is COMMA-separated in FXML, never space-separated. A
+    space-separated pair loads without error as a single class literally named
+    "glass-panel float-timer-card", matching no CSS rule, and the element
+    renders unstyled while still working. See devcheck/FxmlCheck.
+
+    ===========================================================================
+    WHY THE ROOT IS A STACKPane AND NOT A DialogPane
+    ===========================================================================
+    A DialogPane cannot be the root element of an FXML document - FXMLLoader
+    rejects it with "DialogPane is not a valid type", because it validates the
+    root against the types it knows how to construct. The content is therefore
+    a plain container here, and SettingsDialogController.show() installs it into
+    a real Dialog via DialogPane#setContent. The button bar is added in code for
+    the same reason: <buttonTypes> is a DialogPane element and this document
+    has no DialogPane to hang it off.
+    ============================================================================
+-->
+<StackPane xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml"
+           fx:controller="com.unitracker.controller.SettingsDialogController"
+           styleClass="settings-root" prefWidth="620" prefHeight="520">
+
+        <!-- animated="false" is deliberately ABSENT and must not be added.
+
+             JavaFX 25 REMOVED TabPane.animated. Verified against
+             javafx-controls 25.0.1: TabPane exposes side, tabClosingPolicy,
+             rotateGraphic, tabMin/MaxWidth/Height, tabDragPolicy and the
+             selection model, and there is no animated property at all. So
+             there is no tab cross-fade left to switch off, and writing
+             animated="false" does not fail quietly - FXMLLoader throws
+             PropertyNotFoundException: Property "animated" does not exist or
+             is read-only, which takes the whole settings dialog down.
+
+             Worth stating because the natural next step, on finding that
+             switching tabs moves, is to reach for exactly that attribute. -->
+        <TabPane fx:id="tabPane" styleClass="settings-tabs" tabClosingPolicy="UNAVAILABLE">
+
+            <!-- ============================================================ -->
+            <!-- APPEARANCE                                                    -->
+            <!-- ============================================================ -->
+            <Tab text="Appearance">
+                <VBox styleClass="glass-panel settings-tab" spacing="14">
+
+                    <Label text="Appearance" styleClass="panel-title"/>
+
+                    <!-- Animations. The switch behind this is the Anim gate,
+                         which every transition in the app already routes
+                         through - so one checkbox genuinely turns all of them
+                         off, with no per-call-site opt-outs.
+
+                         The preview button shares THIS row, pushed to the far
+                         right by the expanding spacer, rather than sitting at
+                         the bottom of the tab. Two reasons: the setting it
+                         previews and the control that changes it are now
+                         adjacent, so the cause and its effect can be read in
+                         one glance; and a control that jumps position when the
+                         user switches tabs is disorienting in a way that one
+                         that stays put is not.
+
+                         HBox.hgrow="NEVER" on the checkbox states the intent -
+                         a checkbox should be as wide as its label, not as wide
+                         as the row. It is NOT, however, load-bearing: measured,
+                         removing it leaves the checkbox at its preferred width
+                         and the button at the right edge either way. An earlier
+                         draft of this comment claimed it was required, on the
+                         reasonable-sounding theory that a resizable CheckBox
+                         would swallow the spacer's slack. That was never
+                         tested, and it turned out to be false. It stays because
+                         it documents the intent at zero cost; FxmlCheck asserts
+                         the resulting geometry rather than the attribute. -->
+                    <HBox alignment="CENTER_LEFT" spacing="12" maxWidth="Infinity">
+                        <CheckBox fx:id="animationsCheckBox"
+                                  text="Enable animations and transitions"
+                                  styleClass="settings-toggle"
+                                  HBox.hgrow="NEVER">
+                            <tooltip><Tooltip text="Turn off for raw performance - every panel, chart and button in the app honours this"/></tooltip>
+                        </CheckBox>
+                        <Region HBox.hgrow="ALWAYS" minWidth="12"/>
+                        <!-- COMPACT, not a full-width bar. It is inside an HBox
+                             now, so a resizable button would stretch to fill the
+                             row regardless; maxWidth="-Infinity"
+                             (Region.USE_PREF_SIZE) is what keeps it sized to
+                             its text.
+                             The attribute is kept rather than deleted on
+                             purpose. Measured, deleting it happens to leave this
+                             button at its preferred width inside this particular
+                             container - so removal is not the bug - but relying
+                             on a container's cross-axis behaviour to keep a
+                             control compact is not a guarantee. FxmlCheck asserts
+                             the RESULT (laid-out width no greater than preferred,
+                             and a fraction of the dialog) rather than the
+                             attribute. -->
+                        <Button fx:id="previewAnimationsButton" text="Preview the change"
+                                styleClass="secondary-button, preview-button"
+                                maxWidth="-Infinity" HBox.hgrow="NEVER"/>
+                    </HBox>
+                    <Label fx:id="animationsHint" styleClass="settings-hint" wrapText="true" maxWidth="540"/>
+
+                    <Separator/>
+
+                    <!-- UI scale. The em-based stylesheet means this rescales
+                         the entire type hierarchy by changing one number, so
+                         the change is immediate and total rather than a
+                         handful of hard-coded font sizes. -->
+                    <HBox alignment="CENTER_LEFT" spacing="12">
+                        <Label text="Interface size" styleClass="settings-label" minWidth="140"/>
+                        <ComboBox fx:id="scaleCombo" styleClass="settings-combo"
+                                  HBox.hgrow="ALWAYS" maxWidth="Infinity"/>
+                    </HBox>
+                    <Label fx:id="scaleHint" styleClass="settings-hint" wrapText="true" maxWidth="540"/>
+
+                </VBox>
+            </Tab>
+
+            <!-- ============================================================ -->
+            <!-- FOCUS TIMER                                                   -->
+            <!-- ============================================================ -->
+            <Tab text="Focus Timer">
+                <VBox styleClass="glass-panel settings-tab" spacing="12">
+
+                    <Label text="Focus Timer rewards" styleClass="panel-title"/>
+                    <Label text="How many points a completed session is worth, and how fast you level up."
+                           styleClass="settings-hint" wrapText="true"/>
+
+                    <GridPane styleClass="settings-grid" hgap="12" vgap="10">
+                        <columnConstraints>
+                            <ColumnConstraints minWidth="180" hgrow="ALWAYS"/>
+                            <ColumnConstraints minWidth="150" hgrow="NEVER"/>
+                        </columnConstraints>
+
+                        <Label text="Points per level" styleClass="settings-label" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
+                        <Spinner fx:id="pointsPerLevelSpinner" editable="true"
+                                 styleClass="settings-spinner" GridPane.rowIndex="0" GridPane.columnIndex="1">
+                            <tooltip><Tooltip text="Total points needed to reach the next level"/></tooltip>
+                        </Spinner>
+
+                        <Label text="Baseline (per 25 min)" styleClass="settings-label" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
+                        <Spinner fx:id="baselinePointsSpinner" editable="true"
+                                 styleClass="settings-spinner" GridPane.rowIndex="1" GridPane.columnIndex="1">
+                            <tooltip><Tooltip text="Any duration without its own reward is scaled from this, pro rata"/></tooltip>
+                        </Spinner>
+                    </GridPane>
+
+                    <Separator/>
+
+                    <Label text="Reward per duration" styleClass="settings-label"/>
+                    <Label text="Durations without an explicit reward are scaled from the baseline. Set any of them to override."
+                           styleClass="settings-hint" wrapText="true"/>
+
+                    <!-- Populated in code from the same duration list the timer
+                         dropdown uses. See the file comment. -->
+                    <VBox fx:id="rewardGrid" styleClass="settings-rewards" spacing="8"/>
+
+                    <HBox spacing="8">
+                        <Button fx:id="clearRewardsButton" text="Clear all overrides"
+                                styleClass="secondary-button">
+                            <tooltip><Tooltip text="Go back to the pro-rata baseline for every duration"/></tooltip>
+                        </Button>
+                    </HBox>
+                </VBox>
+            </Tab>
+
+            <!-- ============================================================ -->
+            <!-- PROGRESS PRESETS                                              -->
+            <!-- ============================================================ -->
+            <Tab text="Progress Presets">
+                <VBox styleClass="glass-panel settings-tab" spacing="12">
+
+                    <Label text="Progress presets" styleClass="panel-title"/>
+
+                    <HBox alignment="CENTER_LEFT" spacing="12">
+                        <Label text="Default curve for new skills" styleClass="settings-label" minWidth="180"/>
+                        <ComboBox fx:id="defaultCurveCombo" styleClass="settings-combo"
+                                  HBox.hgrow="ALWAYS" maxWidth="Infinity">
+                            <tooltip><Tooltip text="Choosing a curve sets a new skill's target and level milestones automatically"/></tooltip>
+                        </ComboBox>
+                    </HBox>
+                    <Label fx:id="curveHint" styleClass="settings-hint" wrapText="true" maxWidth="540"/>
+
+                    <Separator/>
+
+                    <HBox spacing="8" VBox.vgrow="ALWAYS">
+                        <ListView fx:id="presetList" styleClass="settings-list"
+                                  HBox.hgrow="ALWAYS" VBox.vgrow="ALWAYS"/>
+                    </HBox>
+
+                    <Label fx:id="presetDetail" styleClass="settings-hint"
+                           wrapText="true" maxWidth="540" minHeight="42"/>
+
+                    <HBox spacing="8">
+                        <Button fx:id="addCurveButton" text="Add curve" styleClass="secondary-button"/>
+                        <Button fx:id="editCurveButton" text="Edit" styleClass="secondary-button"/>
+                        <!-- Disabled until a non-built-in preset is selected;
+                             DatabaseHelper also refuses, so this is a courtesy
+                             rather than the enforcement point. -->
+                        <Button fx:id="deleteCurveButton" text="Delete" styleClass="secondary-button" disable="true"/>
+                        <Region HBox.hgrow="ALWAYS"/>
+                        <Button fx:id="resetPresetsButton" text="Restore built-ins" styleClass="secondary-button"/>
+                    </HBox>
+                </VBox>
+            </Tab>
+
+        </TabPane>
+</StackPane>

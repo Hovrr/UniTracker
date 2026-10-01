@@ -79,7 +79,13 @@
             <Button text="Save" styleClass="secondary-button" onAction="#handleSaveState"/>
             <Button text="Import .utrack" styleClass="secondary-button" onAction="#handleImportUtrack"/>
             <Button text="Export .utrack" styleClass="secondary-button" onAction="#handleExportUtrack"/>
-            <Button text="Export PDF" styleClass="accent-button" onAction="#handleExportPdf"/>
+            <Button text="Export PDF" styleClass="secondary-button" onAction="#handleExportPdf"/>
+            <!-- v2.0: the settings entry point. Every setting in the dialog is
+                 write-through, so nothing here needs an Apply counterpart and
+                 the dashboard re-syncs itself when the dialog closes. -->
+            <Button text="Settings" styleClass="secondary-button" onAction="#handleOpenSettings">
+                <tooltip><Tooltip text="Animations, interface size, focus-timer rewards and progress presets"/></tooltip>
+            </Button>
         </HBox>
     </top>
 
@@ -94,7 +100,44 @@
                  more than a 1080p window could satisfy once maximized, so the layout
                  overflowed instead of reflowing. maxWidth stops this column from
                  eating the extra room on a wide screen - the charts should get it. -->
-            <VBox spacing="20" prefWidth="380" minWidth="300" maxWidth="420">
+            <!-- THE SIDEBAR SCROLLS. THIS IS THE PRIMARY FIX FOR THE 1080p
+                 REGRESSION.
+
+                 Three expanded sections - Calendar, Focus Timer and Sticky
+                 Notes - have a combined preferred height well past the ~900px
+                 of usable space on a maximised 1080p window. Without a viewport
+                 the column's preferred height is that sum, and because this is
+                 an HBox the WHOLE centre row grows to the tallest column. The
+                 right panel is then taller than the window, the chart has no
+                 room, and the VBox under compression crushes the cheapest thing
+                 it can find - which was the skill progress bar.
+
+                 Wrapping the column in a ScrollPane breaks that chain: the
+                 sidebar's height is now bounded by the window rather than by its
+                 contents, so it can never dictate how tall the window wants to
+                 be, and the right panel is never handed more height than the
+                 screen has.
+
+                 fitToWidth=true so the column keeps the full 380px width and
+                 no horizontal scrollbar appears. fitToHeight is deliberately
+                 NOT set: leaving it false lets the column be as tall as its
+                 content and scroll, instead of being squeezed to the viewport
+                 and clipping the third section out of existence.
+
+                 prefWidth/minWidth/maxWidth live HERE, on the node that
+                 participates in the HBox layout - not on the inner VBox, which
+                 is now inside a viewport. UiScale.SIDEBAR_MIN_WIDTH and
+                 SIDEBAR_MAX_WIDTH mirror these two numbers, because the focus
+                 timer clock is calibrated against the resulting width. -->
+            <!-- HBox.hgrow="NEVER" keeps the sidebar at its 380px pref instead of
+                 absorbing every spare pixel of a wide window - the chart column
+                 is supposed to have that room. (HBox declares only Hgrow and
+                 Margin as static properties; there is no HBox.halignment, and
+                 writing one is a load-time PropertyNotFoundException.) -->
+            <ScrollPane fx:id="sidebarScroll" fitToWidth="true" styleClass="sidebar-scroll"
+                        prefWidth="380" minWidth="300" maxWidth="420"
+                        HBox.hgrow="NEVER">
+                <VBox spacing="14" styleClass="sidebar-column" fillWidth="true">
 
                 <!-- PART 2: each section is a TitledPane so it can be collapsed when
                      1080p runs out of vertical room. TitledPane (not a nested
@@ -183,7 +226,13 @@
                         </VBox>
                     </HBox>
                     <!-- Item 2.2: duration presets + the gear that sets what each one
-                         is worth. Both persist to app_settings, so no schema change. -->
+                         is worth. Both persist to app_settings, so no schema change.
+
+                         v2.0: the pop-out button is DECLARATIVE. It was previously
+                         appended in code by ensureTimerWindowControls(), which
+                         meant it was invisible to anyone reading this file and
+                         silently stopped existing if the pane's content shape
+                         ever changed. Nothing is created in Java here now. -->
                     <HBox alignment="CENTER_LEFT" spacing="8">
                         <ComboBox fx:id="timerDurationCombo" styleClass="depth-level-combo"
                                   HBox.hgrow="ALWAYS" maxWidth="Infinity">
@@ -198,6 +247,17 @@
                                  styleClass="pomodoro-bar"/>
                     <Label fx:id="levelProgressLabel" text="0 / 100 pts to Lv.2"
                            styleClass="metric-label"/>
+
+                    <!-- v2.0: window-management control, deliberately LAST in the
+                         pane and full-width, so it reads as a panel-level action
+                         rather than as a fourth timer control competing with
+                         Start and Reset. The controller retitles it between
+                         "Pop out timer" and "Dock timer". -->
+                    <Button fx:id="timerWindowButton" text="Pop out timer"
+                            styleClass="secondary-button timer-window-button"
+                            maxWidth="Infinity" onAction="#handleToggleFloatingTimer">
+                        <tooltip><Tooltip text="Run the focus timer in a small always-on-top window"/></tooltip>
+                    </Button>
                 </VBox>
                 </TitledPane>
 
@@ -220,33 +280,88 @@
                     <Label fx:id="compactNotesHint" styleClass="empty-notes-label"
                            text="Pane too short - expand it or collapse another to see the day's notes."
                            wrapText="true" visible="false" managed="false"/>
-                    <ScrollPane fitToWidth="true" styleClass="notes-scroll" VBox.vgrow="ALWAYS">
+                    <!-- prefHeight AND maxHeight, so the list has a usable height when there IS
+                         room and a hard ceiling when there is not.
+
+                         The maxHeight is the load-bearing half. The ScrollPane's
+                         preferred height is its CONTENT's preferred height, and a
+                         day's notes are unbounded, so left to itself this list
+                         asks for as much height as there are notes - which is
+                         what pushed the column past the screen in the first
+                         place.
+
+                         300px is the budget that lets Calendar (~300px) plus
+                         Focus Timer (~330px) plus this list and its pane chrome
+                         fit inside a ~900px 1080p viewport. A taller list is
+                         still reachable: the sidebar viewport scrolls, and the
+                         pinned-notes section above stays visible regardless.
+                         Measured, not guessed - FxmlCheck asserts the resulting
+                         column height against the 1080p viewport. -->
+                    <ScrollPane fitToWidth="true" styleClass="notes-scroll" VBox.vgrow="ALWAYS"
+                                prefHeight="240" maxHeight="300">
                         <VBox fx:id="notesContainer" spacing="10"/>
                     </ScrollPane>
                 </VBox>
                 </TitledPane>
-            </VBox>
+                </VBox>
+            </ScrollPane>
 
             <!-- ==== RIGHT COLUMN: Skill Tracker + Visualization ==== -->
+            <!--
+                 EVERY ROW ABOVE THE CHART CARRIES minHeight="-Infinity".
+
+                 minHeight="-Infinity" is Region.USE_PREF_SIZE: the node's
+                 minimum is its PREFERRED size, so it cannot be laid out
+                 smaller than it wants to be. That is the opposite of what
+                 minHeight normally means and it is deliberate here.
+
+                 The bug it fixes: the right column is a VBox, and a VBox
+                 under vertical compression shrinks its children that are
+                 allowed to shrink, in proportion. A ProgressBar has no
+                 intrinsic minimum worth the name, so it was the cheapest thing
+                 to crush - it collapsed to a couple of pixels and vanished,
+                 taking with it the one persistent indicator of how far along
+                 the current skill is. The window itself was fine; a control
+                 the user relies on was simply gone.
+
+                 So the fixed-height information is pinned here, and the chart
+                 container below is the single thing allowed to absorb
+                 compression (VBox.vgrow="ALWAYS", with its own floor of
+                 minHeight 220). One absorber, rather than every row
+                 contributing a few pixels and the total quietly disappearing.
+            -->
             <VBox styleClass="glass-panel" spacing="12" HBox.hgrow="ALWAYS">
 
                 <!-- Skill selector + Edit/Delete/Reorder + Active/Stalled + swatches + ColorPicker -->
-                <HBox alignment="CENTER_LEFT" spacing="8">
+                <HBox alignment="CENTER_LEFT" spacing="8" minHeight="-Infinity">
                     <Circle fx:id="statusDot" radius="7" fill="#A8EB12"/>
                     <ComboBox fx:id="skillComboBox" promptText="Select a skill" prefWidth="150"/>
-                    <Button text="+ New" styleClass="secondary-button" onAction="#handleAddSkill"/>
-                    <Button fx:id="editSkillButton" text="&#9998; Edit" styleClass="icon-button" onAction="#handleEditSkill"/>
-                    <Button fx:id="deleteSkillButton" text="&#128465; Delete" styleClass="icon-button" onAction="#handleDeleteSkill"/>
-                    <Button text="&#8645; Reorder" styleClass="icon-button" onAction="#handleReorderSkills"/>
-                    <Region HBox.hgrow="ALWAYS"/>
-                    <ToggleButton fx:id="activeStatusToggle" text="Active" styleClass="status-toggle-active"/>
-                    <ToggleButton fx:id="stalledStatusToggle" text="Stalled" styleClass="status-toggle-stalled"/>
+                    <Button text="+ New" styleClass="secondary-button" onAction="#handleAddSkill"
+                            minWidth="-Infinity"/>
+                    <Button fx:id="editSkillButton" text="&#9998; Edit" styleClass="icon-button" onAction="#handleEditSkill"
+                            minWidth="-Infinity"/>
+                    <Button fx:id="deleteSkillButton" text="&#128465; Delete" styleClass="icon-button" onAction="#handleDeleteSkill"
+                            minWidth="-Infinity"/>
+                    <Button text="&#8645; Reorder" styleClass="icon-button" onAction="#handleReorderSkills"
+                            minWidth="-Infinity"/>
+                    <!-- THE CONTROLS THAT YIELD. minWidth="0" lets this spacer
+                         and the ComboBox above absorb a squeeze; the buttons
+                         cannot, because minWidth="-Infinity" pins them to the
+                         width of their own labels. A shortened skill name is
+                         recoverable - the name is repeated in the header - while
+                         six ambiguous button labels ("+ N...", "E...", "Del...",
+                         "Reor...", "Acti...", "Stall...") are not. -->
+                    <Region HBox.hgrow="ALWAYS" minWidth="0"/>
+                    <ToggleButton fx:id="activeStatusToggle" text="Active" styleClass="status-toggle-active"
+                                  minWidth="-Infinity"/>
+                    <ToggleButton fx:id="stalledStatusToggle" text="Stalled" styleClass="status-toggle-stalled"
+                                  minWidth="-Infinity"/>
                     <HBox fx:id="colorSwatchRow" spacing="6" alignment="CENTER_LEFT"/>
                     <ColorPicker fx:id="customColorPicker" styleClass="custom-color-picker"/>
                 </HBox>
 
-                <!-- Metrics: current / target / completion -->
-                <HBox spacing="36" alignment="CENTER_LEFT" styleClass="metrics-row">
+                <!-- Metrics: current / target / completion / estimated finish -->
+                <HBox spacing="36" alignment="CENTER_LEFT" styleClass="metrics-row" minHeight="-Infinity">
                     <VBox alignment="CENTER_LEFT">
                         <Label fx:id="currentPointsLabel" text="0.0" styleClass="metric-value"/>
                         <Label text="Current Points" styleClass="metric-label"/>
@@ -259,13 +374,35 @@
                         <Label fx:id="percentageHeaderLabel" text="0%" styleClass="metric-value"/>
                         <Label text="Completion" styleClass="metric-label"/>
                     </VBox>
+                    <!-- v2.0 - PROJECTED COMPLETION DATE.
+
+                         This is the most actionable number the app can show. A
+                         percentage is descriptive ("62%") and a target is
+                         aspirational ("500 pts"), but neither tells you
+                         anything you can act on. "Finishes around 14 Nov" does
+                         - it says whether you are on track, and it makes an
+                         untouched skill visibly cost you something every day,
+                         which a static percentage never does.
+
+                         It is a LABEL rather than a fifth metric value because
+                         the text is a date, not a number, and at 26px a date
+                         would dominate the row. It is styled as a metric-value
+                         so it still reads as part of the same group, and its
+                         content is replaced by the controller with either a
+                         date, or an explanation of why no honest projection
+                         exists. -->
+                    <VBox alignment="CENTER_LEFT" minWidth="150">
+                        <Label fx:id="etaLabel" text="No estimate yet" styleClass="metric-value eta-value"/>
+                        <Label text="Est. Completion" styleClass="metric-label"/>
+                    </VBox>
                 </HBox>
 
                 <!-- A.1: persistent progress bar - always visible, no longer a toggle-able view -->
-                <ProgressBar fx:id="mainProgressBar" progress="0" maxWidth="Infinity" styleClass="progress-bar"/>
+                <ProgressBar fx:id="mainProgressBar" progress="0" maxWidth="Infinity" styleClass="progress-bar"
+                               minHeight="-Infinity"/>
 
                 <!-- Real-time input: minutes / points -> instantly updates the metrics above -->
-                <HBox spacing="12" alignment="CENTER_LEFT" styleClass="input-row">
+                <HBox spacing="12" alignment="CENTER_LEFT" styleClass="input-row" minHeight="-Infinity">
                     <Label text="Minutes" styleClass="metric-label"/>
                     <Spinner fx:id="minutesSpinner" editable="true" prefWidth="90"/>
                     <Label text="Points" styleClass="metric-label"/>
@@ -279,7 +416,8 @@
                      is drawn; Curve uses it to pick one specific descendant of the currently
                      selected skill. Hidden for I-Shaped/Skill-Tree - see
                      DashboardController#showDepthLevelComboBox. -->
-                <FlowPane hgap="8" vgap="8" styleClass="toggle-row" alignment="CENTER_LEFT">
+                <FlowPane hgap="8" vgap="8" styleClass="toggle-row" alignment="CENTER_LEFT"
+                          minHeight="-Infinity">
                     <!-- Item 1.1: Velocity and Time Split lead the row. They are the
                          two aggregate/time views (LineChart + pie); the five that
                          follow are all structural views of the hierarchy, so this

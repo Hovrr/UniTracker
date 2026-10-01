@@ -27,6 +27,31 @@ jars = [j for j in glob.glob(os.path.join(M2, "**", "*.jar"), recursive=True)
 
 sources = glob.glob(os.path.join(ROOT, "src", "main", "java", "**", "*.java"),
                     recursive=True)
+tests = glob.glob(os.path.join(ROOT, "src", "test", "java", "**", "*.java"),
+                  recursive=True)
+
+# v2.0: compile the JUnit suite too, IF the JUnit jars are on this machine.
+#
+# They usually will not be, on a first run: JUnit is fetched by Maven, and
+# Maven is not on PATH here. So the test sources are compiled only when the
+# jars are found, and the skip is reported loudly rather than silently - a
+# green run that quietly ignored half the source tree is worse than a red one.
+junit_jars = [j for j in glob.glob(os.path.join(M2, "**", "*.jar"), recursive=True)
+              if "junit" in os.path.basename(j).lower()
+              or "opentest4j" in os.path.basename(j).lower()
+              or "apiguardian" in os.path.basename(j).lower()]
+
+if tests and junit_jars:
+    jars = jars + junit_jars
+    sources = sources + tests
+    print("compiling %d sources + %d test sources against %d jars"
+          % (len(sources) - len(tests), len(tests), len(jars)))
+elif tests:
+    print("NOTE: %d test source(s) found but no JUnit jars in ~/.m2, so they were NOT"
+          % len(tests))
+    print("      compiled. Run 'mvn test' once Maven can reach a repository.")
+else:
+    print("compiling %d sources against %d jars" % (len(sources), len(jars)))
 
 os.makedirs(OUT, exist_ok=True)
 argfile = os.path.join(tempfile.gettempdir(), "unitracker_javac_args.txt")
